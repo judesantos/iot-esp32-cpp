@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <head>
+    <title>
+      ESP32 Device Manager 
+    </title>
+    <link rel="icon" href="data:,"> 
+    <link rel="stylesheet" type="text/css" href="./styles.css">
+    <script type="text/javascript" src="./main.js"></script>
+  </head>
+  <body>
+    <nav id="page-nav">
+      <label for="hamburger">&#9776;</label>
+      <input type="checkbox" id="hamburger"/>
+      <label>ESP32 Device Manager</label>
+      <ul>
+        <li><a href="javascript:void(0)" onclick="callHome()">Home</ae</li>
+        <li><a href="javascript:void(0)" onclick="callGpio()">GPIO</a></li>
+        <li><a href="javascript:void(0)" onclick="callGps()">GPS</a></li>
+        <li><a href="javascript:void(0)" onclick="callThermistor()">Thermistor</a></li>
+        <li><a href="javascript:void(0)" onclick="callProximity()">Proximity</a></li>
+      </ul>
+    </nav>
+    <div id="page-content" style="padding: 10px;">
+        <center>
+            <div id="app_view"></div>
+        </center>
+    </div>
+  </body>
+</html>
