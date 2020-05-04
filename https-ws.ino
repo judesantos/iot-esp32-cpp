@@ -77,6 +77,15 @@ void saveConfigCb() {
   // shouldSaveConfig = true;
 }
 
+std::string topicGeneralPreProcessHandler(const std::string& msg) {
+  Serial.println("topicGeneralPreProcessHandler() - received request");
+  return msg;
+}
+
+void topicGeneralPostProcessHandler(const std::string& msg) {
+  Serial.println("topicGeneralPostProcessHandler() - process request");
+}
+
 void setup() {
  
   Serial.begin(115200);
@@ -131,7 +140,15 @@ void setupAsyncServer(void *params) {
   
   /* register websockets */
   
-  WebSocketNode *wsNode = new WebSocketNode("/", &WebSocketHandler::create);
+  const char *topic_general = "/";
+  
+  WebSocketNode *wsNode = new WebSocketNode(topic_general, &WebSocketHandler::create);
+  // get reference to topic and setup application layer handlers 
+  // used by all connections for this topic
+  WebSocketTopic *tp = WebSocketManager::topic(topic_general);
+  tp->registerPreProcessHandler(topicGeneralPreProcessHandler);
+  tp->registerPostProcessHandler(topicGeneralPostProcessHandler);
+  
   secureServer.registerNode(wsNode);
 
   // start server now!

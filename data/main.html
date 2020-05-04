@@ -6,20 +6,81 @@
       ESP32 Device Manager 
     </title>
     <link rel="icon" href="data:,"> 
+    <!--
     <link rel="stylesheet" type="text/css" href="./styles.css">
+    -->
+    <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
+    <link rel="stylesheet" href="https://www.w3schools.com/lib/w3-theme-indigo.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
     <script type="text/javascript" src="./main.js"></script>
+    <style>
+      .body {
+        position: relative;
+        display: flex;
+        flex-flow: column;
+        height: 100%;
+      }
+      .content-body {
+        flex-grow: 1;
+      }
+
+      .w3-overlay {
+        cursor: pointer;
+        position: absolute;
+      }
+      .w3-sidebar {
+        display: none;
+        z-index: 3;
+      }
+    </style>
   </head>
   <body>
+      <!-- Sidebar -->
+      <div class="w3-sidebar w3-bar-block w3-border-right" id="sideMenu">
+        <a href="#" class="w3-bar-item w3-large w3-right" onclick="sbClose()" style="text-align:right;">&times;</a>
+        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="callHome();sbClose();">Home</a>
+        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="callGpio();sbClose();">GPIO</a>
+        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="callGps();sbClose();">GPS</a>
+        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="callThermistor();sbClose();">Thermistor</a>
+        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="callProximity();sbClose();">Proximity</a>
+      </div>
+      <!-- Page Content -->
+      <div id="mainBody" class="w3-card-4">
+       <div class="w3-overlay w3-animate-opacity" onclick="sbClose()" id="idOverlay"></div>
+       <!-- header -->
+        <div class="w3-bar w3-theme w3-xlarge">
+          <a id="navOpen" class="w3-bar-item w3-button" href="#" onclick="sbOpen()"><i class="fa fa-bars"></i></a>
+          <span class="w3-bar-item">ESP32 Device Manager</span>
+        </div>
+        <!-- body -->
+        <div class="w3-container content-body" id="app_view"></div>
+      </div>
+    <script>
+      const sbOpen = () => {
+        sideMenu.style.display = "block";
+        sideMenu.style.width = "45%";
+        mainBody.style.marginLeft = "45%";
+        navOpen.style.display = "none";
+        idOverlay.style.display = "block";
+      }
+      const sbClose = () => {
+        sideMenu.style.display = "none";
+        mainBody.style.marginLeft = "0%";
+        navOpen.style.display = "inline-block";
+        idOverlay.style.display = "none";
+      }
+    </script>
+    <!--
     <nav id="page-nav">
       <label for="hamburger">&#9776;</label>
       <input type="checkbox" id="hamburger"/>
       <label>ESP32 Device Manager</label>
       <ul>
-        <li><a href="javascript:void(0)" onclick="callHome()">Home</ae</li>
-        <li><a href="javascript:void(0)" onclick="callGpio()">GPIO</a></li>
-        <li><a href="javascript:void(0)" onclick="callGps()">GPS</a></li>
-        <li><a href="javascript:void(0)" onclick="callThermistor()">Thermistor</a></li>
-        <li><a href="javascript:void(0)" onclick="callProximity()">Proximity</a></li>
+        <li><a href="#" onclick="callHome()">Home</ae</li>
+        <li><a href="#" onclick="callGpio()">GPIO</a></li>
+        <li><a href="#" onclick="callGps()">GPS</a></li>
+        <li><a href="#" onclick="callThermistor()">Thermistor</a></li>
+        <li><a href="#" onclick="callProximity()">Proximity</a></li>
       </ul>
     </nav>
     <div id="page-content" style="padding: 10px;">
@@ -27,5 +88,6 @@
             <div id="app_view"></div>
         </center>
     </div>
+    -->
   </body>
 </html>

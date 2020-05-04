@@ -21,7 +21,8 @@ using namespace httpsserver;
 #define MAX_TOPICS 100
 #define MAX_TOPIC_SUBSCRIBERS 100
 
-typedef void (*fnHdlPostCb)(const String &msg);
+typedef std::string (*fnHdlPreCb)(const std::string& msg);
+typedef void (*fnHdlPostCb)(const std::string& msg);
 
 class WebSocketTopic;
 class WebSocketManager;
@@ -37,6 +38,7 @@ public:
   WebSocketHandler(WebSocketTopic *parent) {
     this->m_parent = parent;
   }
+    
   void onClose();
   void onMessage(WebsocketInputStreambuf *stream); 
   
@@ -50,10 +52,20 @@ class WebSocketTopic {
 private:
   WebSocketHandler *m_wsHandlers[MAX_TOPIC_SUBSCRIBERS] = {0};
 public:
-  String name; // topic name
+  fnHdlPreCb m_hdlPreCb = nullptr;
+  fnHdlPostCb m_hdlPostCb = nullptr;
+  std::string name; // topic name
 
   WebSocketTopic(const char *topic) {
     this->name = topic;
+  }
+
+  void registerPreProcessHandler(fnHdlPreCb cb) {
+    this->m_hdlPreCb = cb;
+  }
+
+  void registerPostProcessHandler(fnHdlPostCb cb) {
+    this->m_hdlPostCb = cb;
   }
 
   void sendToAllClients(std::string &msg) {
@@ -93,7 +105,7 @@ class WebSocketManager {
 private:
   static WebSocketTopic *m_wsTopics[MAX_TOPICS];
 public:
-  static WebSocketTopic* topic(const char* topic, fnHdlPostCb hdlPostCb = nullptr) {
+  static WebSocketTopic* topic(const char* topic) {
     WebSocketTopic *wsTopic = nullptr;
     for (int idx = 0; idx < MAX_TOPICS; idx++) {
       // check if exists
@@ -129,14 +141,29 @@ void WebSocketHandler::onClose() {
 
 // handle incoming request, send response
 void WebSocketHandler::onMessage(WebsocketInputStreambuf *stream) {
+  
   // Get the input message
   std::ostringstream ss;
   std::string msg;
   ss << stream;
   msg = ss.str();
+  
   Serial.println(String("WebSocketHandler::onMessage: ") + msg.c_str());
-  // send back response
+  
+  // set client callback before sending back to client
+  if (nullptr != this->m_parent->m_hdlPreCb) {
+    Serial.println("WebSocketHandler::onMessage - m_hdlPreCb");
+    msg = this->m_parent->m_hdlPreCb(msg);
+  }
+  
+  // send back response now!
   this->m_parent->sendToAllClients(msg);
+  
+  // set client callback after message was sent to client
+  if (nullptr != this->m_parent->m_hdlPostCb) {
+    Serial.println("WebSocketHandler::onMessage - m_hdlPostCb");
+    this->m_parent->m_hdlPostCb(msg);
+  }
 }
 
 WebSocketHandler* WebSocketHandler::create(const std::string& _topic) {
