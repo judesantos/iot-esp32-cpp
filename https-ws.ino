@@ -31,10 +31,10 @@
 
 #include <SPIFFS.h>
 #include <FS.h>
-#include <ArduinoJson.h>
 #include <string>
 
 #include "WebSocketService.h"
+#include "Device/DeviceManager.h"
 
 using namespace httpsserver;
 
@@ -42,6 +42,8 @@ void handleRoute(HTTPRequest *req, HTTPResponse *res);
 
 #define DIR_PUBLIC ""
 #define MAX_CLIENTS 4
+#define INTERNAL_AP_SSID "ytAP"
+#define INTERNAL_AP_PW "mangledc@bbag3069"
 /** Check if we have multiple cores */
 #if CONFIG_FREERTOS_UNICORE
   #define ARDUINO_RUNNING_CORE 0
@@ -64,8 +66,11 @@ SSLCert cert = SSLCert(
   example_key_DER, example_key_DER_len
 );
  
+YT::DeviceManager deviceManager;
 HTTPSServer secureServer = HTTPSServer(&cert, 443, MAX_CLIENTS);
-  
+
+// AP Configuration
+
 void configCb(WiFiManager *cfgMgr) {
   Serial.println("Entered config mode");
   Serial.println(WiFi.softAPIP());
@@ -77,27 +82,24 @@ void saveConfigCb() {
   // shouldSaveConfig = true;
 }
 
-std::string topicGeneralPreProcessHandler(const std::string& msg) {
-  Serial.println("topicGeneralPreProcessHandler() - received request");
-  return msg;
-}
-
-void topicGeneralPostProcessHandler(const std::string& msg) {
-  Serial.println("topicGeneralPostProcessHandler() - process request");
-}
+  
+/*******************************************************************
+ * uPC routines setup() and loop()
+ ******************************************************************/
 
 void setup() {
- 
+
   Serial.begin(115200);
-  
   Serial.println("Mounting SPIFFS...");
+
   if (!SPIFFS.begin(false)) {  
      Serial.println("SPIFFS mount failed. Exit!");  
      return; 
   }
+
   Serial.println("SPIFFS has been mounted.");
 
-  // Now that SPIFFS is ready, we can create or load the certificate
+  // load certificate - replace default (self-signed) test certificate 
   /*
   SSLCert *cert = getCertificate();
   if (cert == NULL) {
@@ -105,24 +107,59 @@ void setup() {
     while(true);
   }
   */
-  
-  Serial.println("Connecting to wifi...");
-  
+
+  /* 
+    Configure wifi. 
+    To connect to a nearby AP(wifi) - with internet connection, 
+    we need to provide valid access for ESP32. For first time access, 
+    setup ourself as AP - 'ytAP', to scan and list nearby APs. 
+    Connect to 'ytAP' from a mobile device or pc.
+    Once connected to 'ytAP', a user interface is autoloaded with a list of SSIDs, 
+    select target SSID and provide password. Once access is granted, 
+    'ytAP' will automatically shutdown and reconnect to the new AP.
+    The ssid and key will be stored in flash memory for reconnections.
+  */
   WiFiManager wifiManager;
-  
+
+  Serial.println("Connecting to wifi...");
+
   wifiManager.setAPCallback(configCb);
   wifiManager.setSaveConfigCallback(saveConfigCb);
-  
-  wifiManager.autoConnect("ytAP", "mangledc@bbag3069");
-  
-  Serial.println("Connected to wifi.");
-  Serial.println("Setup async, secure web server...");
+  wifiManager.autoConnect(INTERNAL_AP_SSID, INTERNAL_AP_PW);
 
+  Serial.println("Connected to wifi.");
+  Serial.println("Setup web server...");
+
+  // accept requests from another thread - asynchrnous webserver connections
   xTaskCreatePinnedToCore(setupAsyncServer, "https443", 6144, NULL, 1, NULL, ARDUINO_RUNNING_CORE);  
 }
  
 void loop() {
+  // do hardware monitoring stuff here,,,
   delay(10000);
+}
+
+/*******************************************************************
+ * Application services 
+ ******************************************************************/
+
+void topicGeneralPreProcessHandler(const std::string& msg) {
+  Serial.println("topicGeneralPreProcessHandler() - received request");
+}
+
+void topicGeneralPostProcessHandler(std::string& msg) {
+  Serial.println("topicGeneralPostProcessHandler() - process request");
+}
+
+std::string preProcessHandler(const std::string& msg) {
+  Serial.println("socketPreProcessHandler() - received request");
+  topicGeneralPreProcessHandler(msg);
+  return deviceManager.processRequest(msg);
+}
+
+void postProcessHandler(std::string& msg) {
+  Serial.println("socketPostProcessHandler() - process request");
+  topicGeneralPostProcessHandler(msg);
 }
 
 void setupAsyncServer(void *params) {
@@ -130,25 +167,55 @@ void setupAsyncServer(void *params) {
   /* register routes */
 
   ResourceNode *rt404 = new ResourceNode("", "GET", handle404);
-  ResourceNode *rtRoot = new ResourceNode("/", "GET", handleRoute);
-  ResourceNode *rtJs = new ResourceNode("/main.js", "GET", handleRoute);
-  ResourceNode *rtCss = new ResourceNode("/styles.css", "GET", handleRoute);
   secureServer.setDefaultNode(rt404);
+  ResourceNode *rtRoot = new ResourceNode("/", "GET", handleRoute);
   secureServer.registerNode(rtRoot);
+  ResourceNode *rtJs = new ResourceNode("/main.js", "GET", handleRoute);
   secureServer.registerNode(rtJs);
+  ResourceNode *rtCss = new ResourceNode("/styles.css", "GET", handleRoute);
   secureServer.registerNode(rtCss);
   
   /* register websockets */
-  
-  const char *topic_general = "/";
-  
-  WebSocketNode *wsNode = new WebSocketNode(topic_general, &WebSocketHandler::create);
-  // get reference to topic and setup application layer handlers 
-  // used by all connections for this topic
-  WebSocketTopic *tp = WebSocketManager::topic(topic_general);
-  tp->registerPreProcessHandler(topicGeneralPreProcessHandler);
-  tp->registerPostProcessHandler(topicGeneralPostProcessHandler);
-  
+
+  const char *topic_gpio = "/gpio";
+  const char *topic_gps = "/gps";
+  const char *topic_thermistor = "/thermistor";
+  const char *topic_proximity = "/proximity";
+  // create topic and setup application layer handlers 
+  // - used by all connections for this topic
+  WebSocketTopic *tp = WebSocketManager::topic(topic_gpio);
+  if (tp) {
+    tp->registerPreProcessHandler(&preProcessHandler);
+    tp->registerPostProcessHandler(&postProcessHandler);
+  }
+  // register now!
+  WebSocketNode *wsNode = new WebSocketNode(topic_gpio, &WebSocketHandler::create);
+  secureServer.registerNode(wsNode);
+
+  // do the same routine for the rest of the topics
+
+  tp = WebSocketManager::topic(topic_gps);
+  if (tp) {
+    tp->registerPreProcessHandler(&preProcessHandler);
+    tp->registerPostProcessHandler(&postProcessHandler);
+  }
+  wsNode = new WebSocketNode(topic_gps, &WebSocketHandler::create);
+  secureServer.registerNode(wsNode);
+
+  tp = WebSocketManager::topic(topic_thermistor);
+  if (tp) {
+    tp->registerPreProcessHandler(&preProcessHandler);
+    tp->registerPostProcessHandler(&postProcessHandler);
+  }
+  wsNode = new WebSocketNode(topic_thermistor, &WebSocketHandler::create);
+  secureServer.registerNode(wsNode);
+
+  tp = WebSocketManager::topic(topic_proximity);
+  if (tp) {
+    tp->registerPreProcessHandler(&preProcessHandler);
+    tp->registerPostProcessHandler(&postProcessHandler);
+  }
+  wsNode = new WebSocketNode(topic_proximity, &WebSocketHandler::create);
   secureServer.registerNode(wsNode);
 
   // start server now!
@@ -157,10 +224,7 @@ void setupAsyncServer(void *params) {
   if (secureServer.isRunning()) {
     Serial.println("Server ready.");
     while(true) {
-      // This call will let the server do its work
       secureServer.loop();
-
-      // Other code would go here...
       delay(1);
     }
   }  
@@ -218,7 +282,6 @@ void handleRoute(HTTPRequest * req, HTTPResponse * res) {
     if (
       std::string::npos != reqFile.find(".js") || 
       std::string::npos != reqFile.find(".css") ||
-      std::string::npos != reqFile.find(".html") ||
       std::string::npos != reqFile.find(".jpg") ||
       std::string::npos != reqFile.find(".png")
     ) {
@@ -325,4 +388,5 @@ SSLCert * getCertificate() {
     Serial.printf("Read %u bytes of certificate and %u bytes of key from SPIFFS\n", certSize, keySize);
     return new SSLCert(certBuffer, certSize, keyBuffer, keySize);
   }
+
 }

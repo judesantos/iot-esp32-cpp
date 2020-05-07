@@ -1,8 +1,8 @@
 
-const debug = false;
+const debug = true;
 const GPIO = (_type='out') => {
 
-    this.state = 'Unknown'; // Currnet state: 'ON', 'OFF'
+    this.state = '?'; // Currnet state: 'ON', 'OFF'
     this.pin = null; // EX.: GPIO PIN 1, 2, 3, ETC.
     this.type = _type; // 'in', 'out'
     this._enable = true // transtion state - send to device manager
@@ -62,6 +62,8 @@ const init = () => {
 
     _clearPageBody();
 
+    callHome();
+
     init_ws();
 };
 
@@ -79,7 +81,7 @@ window.esp32 = {
 
 const init_ws = () => {
     if (!window.esp32.gws.ws) {
-        let target = "wss://" + document.location.host;
+        let target = "wss://" + document.location.host + '/gpio';
         printMessage("Connecting to " + target + "...");
         window.esp32.gws.ws = new WebSocket(target);
         window.esp32.gws.ws.onopen = (evt) => { onOpen(evt); }
@@ -98,41 +100,36 @@ const onOpen = (evt) => {
 const onClose = (evt) => {
     if (window.esp32.gws.ws) {
         printMessage("onClose Event - Websocket error: " + 
-            evt.code + ", reason: " + evt.reason);
-    } else {
-        printMessage("<strong>Closing socket...</strong>");
-    }
-    if (window.esp32.gws.ws) {
-        window.esp32.gws.disconnect();
+            evt.code + ", reason: " + evt.reason, true);
         window.esp32.gws.connected = false;
         window.esp32.gws.ws = null;
+    } else {
+        printMessage("Closing socket...");
     }
 }
 
 const onMessage = (evt) => {
-    printMessage('Message from server: <span style="color:blue;">' + evt.data + '</span>');
+    printMessage('Message Received: [' + evt.data + ']');
     try {
-        res = JSON.parse(evt.data);
-        processJsonResponse(res);
+        if (evt.data) {
+            res = JSON.parse(evt.data);
+            processJsonResponse(res);
+        } else {
+            printMessage('Error message received:', true);
+            printMessage(evt);
+        }
     } catch (e) {
-        console.error(e);
+        printMessage(e, true);
     }
 }
 
 const onError = (evt) => {
-    printMessage('Error: <span style="color:red;">' + evt.data + '</span>');
+    printMessage(evt.data, true);
 }
-
-const sendMessage = (msg) => {
-    if (window.esp32.gws.connected) {
-        printMessage('Message to server: <span style="color:green;">' + msg + '</span>');
-        window.esp32.gws.ws.send(msg);
-    }
-} 
 
 const processJsonResponse = (res) => {
     if (0 !== res.status) {
-        console.error(res.message);
+        printMessage(res.message, true);
         return;
     } 
     if ('data' in res && 'request' in res.data) {
@@ -162,24 +159,21 @@ const processJsonResponse = (res) => {
 const sendJsonMessage = (json) => {
     init_ws();
     if (window.esp32.gws.connected) {
-        printMessage('Message to server: <span style="color:green;">' + json + '</span>');
+        printMessage('Send Request: [' + json + ']');
         window.esp32.gws.ws.send(json);
     } else {
-        printMessage('Error: <span style="color:red;">sendJsonMessage error: Not Connected</span>');
+        printMessage('sendJsonMessage error: Not Connected', true);
     }
 } 
 
-const printMessage = (msg) => {
-    if (!debug)
+const printMessage = (msg, error = false) => {
+    if (!debug) 
         return;
-    let p = document.createElement('span');
-    p.style.wordwrap = 'break-word';
-    p.style.color = 'red';
-    p.style.textalign = 'left';
-    p.style.padding = '1em'
-    p.style.width = '100%';
-    p.innerHTML = msg;
-    app_view.appendChild(p);
+    if (error) {
+        console.error(msg);
+    } else {
+        console.log(msg);
+    }
 }
 
 const _closeSocket = () => {
@@ -198,6 +192,28 @@ const callHome = () => {
     // clear previous content 
     _clearPageBody(); 
     // rendeer new content
+    const _body = 
+        '<div class="w3-bar">' +
+          '<h3 class="w3-bar-item" style="color:rgb(124, 156, 206)">home</h3></a><br>' +
+          '<a href="#" class="w3-bar-item w3-right"><i class="fa fa-search"></i></a>' +
+        '</div>' +
+        '<div class="w3-content w3-container">' +
+          '<p class="w3-opacity"><b>source</b></p>' +
+          '<div class="w3-panel w3-white w3-card w3-display-container">' +
+          '   <span class="w3-display-topright w3-padding w3-hover-red">X</span>' +
+          '  <p class="w3-text-blue"><b>visit github</b></p>' +
+          '  <p>https://github.com/judesantos/iot-esp32-cpp</p>' +
+          '  <p class="w3-text-blue">Clone project</p>' +
+          '</div>' +
+          '<p class="w3-opacity"><b>tutorial</b></p>' +
+          '<div class="w3-panel w3-white w3-card w3-display-container">' +
+          '  <span class="w3-display-topright w3-padding w3-hover-red">X</span>' +
+          '  <p class="w3-text-blue"><b>give it a spin</b></p>' +
+          '  <p>https://github.com/judesantos/iot-esp32-cpp/blob/master/README.md</p>' +
+          '</div>' +
+        '</div>';
+    // render content
+    appView.innerHTML = _body;
 }
 
 const callGpio = () => {
@@ -210,96 +226,162 @@ const callGpio = () => {
     window.esp32.gpio = gpio;
     // set dom element id = gpio_state
     const _body = 
-        '<h2 style="color:rgb(124, 156, 206)">GPIO Control</h2>' +
-        '<div class="form-window"> ' +
-            '<p>pin#:&nbsp;<select onchange="pinChanged(this.value);">' + 
-            '   <option value="0">0</option>' +
-            '   <option value="1">1</option>' +
-            '   <option value="2" selected>2</option>' +
-            '   <option value="3">3</option>' +
-            '   <option value="4">4</option>' +
-            '   <option value="5">5</option>' +
-            '   <option value="6">6</option>' +
-            '   <option value="7">7</option>' +
-            '   <option value="8">8</option>' +
-            '   <option value="9">9</option>' +
-            '   <option value="10">10</option>' +
-            '   <option value="11">11</option>' +
-            '   <option value="12">12</option>' +
-            '   <option value="13">13</option>' +
-            '   <option value="14">14</option>' +
-            '   <option value="15">15</option>' +
-            '   <option value="16">16</option>' +
-            '   <option value="17">17</option>' +
-            '   <option value="18">18</option>' +
-            '   <option value="19">19</option>' +
-            '   <option value="20">20</option>' +
-            '   <option value="21">21</option>' +
-            '   <option value="22">22</option>' +
-            '   <option value="23">23</option>' +
-            '   <option value="24">24</option>' +
-            '   <option value="26">26</option>' +
-            '   <option value="27">27</option>' +
-            '   <option value="28">28</option>' +
-            '   <option value="29">29</option>' +
-            '   <option value="30">30</option>' +
-            '   <option value="31">31</option>' +
-            '   <option value="32">32</option>' +
-            '   <option value="34">34</option>' +
-            '   <option value="35">35</option>' +
-            '   <option value="36">36</option>' +
-            '   <option value="37">37</option>' +
-            '   <option value="39">39</option>' +
-            '</select></p>' +
-            '<p>type:&nbsp;<select onchange="typeChanged(this.value);">' + 
-            '   <option value="in">IN</option>' +
-            '   <option value="out" selected>OUT</option>' +
-            '</select></p>' +
+        '<div class="w3-bar" style="padding:none !important">' +
+          '<h3 class="w3-bar-item" style="color:rgb(124, 156, 206)">gpio</h3><br>' +
         '</div>' +
-        '<div class="view-window">' +
-        '<p>State: <strong id="gpio_state"></strong></p>' +
-        '<p><button class="button" id="idButtonOn" onclick="_gpioEnable(2, true);">ON</button></p>' +
-        '<p><button class="button button2" id="idButtonOff" onclick="_gpioEnable(2, false)">OFF</button></p>';
-        '</div>'
+        '<div class="w3-content w3-container">' +
+          '<center><u>pin state</u><h1 id="gpio_state"></h1><br>' +
+          '<div class="w3-cell-row">' +
+          '<div class="w3-dropdown-click w3-cell" style="width:30%;background-color:none !important;">' +
+              '<button class="w3-btn w3-border w3-dark-gray w3-block" onclick="pinDropdownOpen()">pin' +
+              '<i class="fa fa-caret-down" style="float:right;padding-top:0.3em;"></i></button>' +
+              '<div class="w3-dropdown-content w3-bar-block w3-border" id="ddGpioPin">' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(1);">GPIO1</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(2);">GPIO2</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(3);">GPIO3</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(4);">GPIO4</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(5);">GPIO5</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(6);">GPIO6</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(7);">GPIO7</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(8);">GPIO8</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(9);">GPIO9</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(10);">GPIO10</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(11);">GPIO11</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(12);">GPIO12</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(13);">GPIO13</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(14);">GPIO14</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(15);">GPIO15</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(16);">GPIO16</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(17);">GPIO17</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(18);">GPIO18</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(19);">GPIO19</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(20);">GPIO20</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(21);">GPIO21</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(22);">GPIO22</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(23);">GPIO23</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(24);">GPIO24</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(25);">GPIO25</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(26);">GPIO26</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(27);">GPIO27</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(28);">GPIO28</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(29);">GPIO29</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(30);">GPIO30</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(31);">GPIO31</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(32);">GPIO32</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(33);">GPIO33</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(34);">GPIO34</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(35);">GPIO35</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(36);">GPIO36</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(37);">GPIO37</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(38);">GPIO38</a>' +
+              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(39);">GPIO39</a>' +
+              '</div>' +
+          '</div>' +
+          '<div class="w3-cell w3-border-bottom" style="width:70%">' +
+              '<strong><label id="ddGpioLbl"></label></strong>' +
+          '</div>' +
+          '</div>' +
+          '<div class="w3-cell-row">' +
+          '<div class="w3-dropdown-click w3-cell" style="width:30%;background-color:none !important">' +
+              '<button class="w3-btn w3-border w3-dark-gray w3-block" onclick="typeDropdownOpen()">io' +
+              '<i class="fa fa-caret-down" style="float:right;padding-top:0.3em;"></i></button>' +
+              '<div class="w3-dropdown-content w3-bar-block w3-border" id="ddGpioType">' +
+              '  <a href="#" class="w3-bar-item w3-button" onclick="typeChanged(\'in\')">IN</a>' +
+              '  <a href="#" class="w3-bar-item w3-button" onclick="typeChanged(\'out\')">OUT</a>' +
+              '</div>' +
+          '</div>' +
+          '<div class="w3-cell w3-border-bottom" style="width:70%">' +
+              '<strong><label id="ddGpioTypeLbl"></label></strong>' +
+          '</div>' +
+          '</div><br>' +
+          '<p><button class="w3-btn w3-xlarge w3-block w3-hover-orange w3-red w3-border" id="idButtonOn" onclick="_gpioEnable(2, true);">on</button>' +
+          '<p><button class="w3-btn w3-xlarge w3-block w3-hover-orange w3-dark-gray w3-border" id="idButtonOff" onclick="_gpioEnable(2, false)">off</button>' +
+          '</center><p><br><hr/><p>' +
+        '</div>';
 
-    app_view.innerHTML = _body; 
-    
+    appView.innerHTML = _body;
+    // set default io state
     let state = document.getElementById('gpio_state');
+    if (!state) {
+        throw 'DOM object "gpio_state" not found"';
+        return;
+    }
     state.innerText = gpio.state;
-
 }
 
 const pinChanged = (val) => {
     if (val) {
         window.esp32.gpio.pin = parseInt(val);
-        window.esp32.gpio.state = 'Unknown';
+        window.esp32.gpio.state = '?';
+        ddGpioLbl.innerText = 'GPIO' + val;
     }
+    pinDropdownClose();
+}
+
+const pinDropdownOpen = () => {
+    // open select dropdown
+    ddGpioPin.style.display = "block";
+}
+const pinDropdownClose = () => {
+    // close select dropdown
+    ddGpioPin.style.display = "none";
 }
 
 const typeChanged = (val) => {
     if (val) {
         window.esp32.gpio.type = val;
+        ddGpioTypeLbl.innerText = val.toUpperCase();
     }
+    typeDropdownClose();
+}
+
+const typeDropdownOpen = () => {
+    ddGpioType.style.display = "block";
+}
+const typeDropdownClose = () => {
+    ddGpioType.style.display = "none";
 }
 
 const callGps = () => {
     // clear previous content 
    _clearPageBody(); 
     // rendeer new content
+    const _body = 
+        '<div class="w3-bar">' +
+          '<h3 class="w3-bar-item" style="color:rgb(124, 156, 206)">gps</h3></a><br>' +
+        '</div>' +
+        '<div class="w3-content">' +
+        '</div>';
+
+    appView.innerHTML = _body;
 }
 
 const callThermistor = () => {
     // clear previous content 
    _clearPageBody(); 
     // rendeer new content
+    const _body = 
+        '<div class="w3-bar">' +
+          '<h3 class="w3-bar-item" style="color:rgb(124, 156, 206)">thermistor</h3></a><br>' +
+        '</div>' +
+        '<div class="w3-content">' +
+        '</div>';
 
+    appView.innerHTML = _body;
 }
 
 const callProximity = () => {
     // clear previous content 
    _clearPageBody(); 
     // rendeer new content
+    const _body = 
+        '<div class="w3-bar">' +
+          '<h3 class="w3-bar-item" style="color:rgb(124, 156, 206)">proximity</h3></a><br>' +
+        '</div>' +
+        '<div class="w3-content">' +
+        '</div>';
 
+    appView.innerHTML = _body;
 }
 
 /**
@@ -317,7 +399,7 @@ const _gpioEnable = (pinId, enable) => {
 }
 
 const _clearPageBody = () => {
-    app_view.innerHTML = '';
+    appView.innerHTML = '';
 }
 
 // inist socket on page reload
