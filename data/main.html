@@ -23,6 +23,10 @@
         flex-grow: 1;
       }
 
+      a {
+        text-decoration:none
+      }
+
       .w3-overlay {
         cursor: pointer;
         position: absolute;
@@ -37,7 +41,7 @@
       <!-- Sidebar -->
       <div class="w3-sidebar w3-bar-block w3-border-right" id="sideMenu">
         <a href="#" class="w3-bar-item w3-large w3-right" onclick="sbClose()" style="text-align:right;">&times;</a>
-        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="callHome();sbClose();">home</a>
+        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="callHome();sbClose();"><i class="fa fa-home"></i></a>
         <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="callGpio();sbClose();">gpio</a>
         <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="callGps();sbClose();">gps</a>
         <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="callThermistor();sbClose();">thermistor</a>
@@ -45,7 +49,11 @@
       </div>
       <!-- Page Content -->
       <div id="mainBody">
-       <div class="w3-overlay w3-animate-opacity" onclick="sbClose()" id="idOverlay"></div>
+       <div class="w3-overlay w3-animate-opacity" onclick="sbClose()" id="idOverlay">
+        <i class="fa fa-refresh w3-xxxlarge w3-spin" id="idSpinner" 
+          style="position:fixed;top:30%;left:45%;-webkit-transform:translate(-50%, -50%);
+            transform:translate(-50%,-50%);display:none;"></i>
+       </div>
         <!-- header -->
         <div class="w3-bar w3-theme w3-xlarge" id="headerBar">
           <a id="navOpen" class="w3-bar-item w3-button" href="#" onclick="sbOpen()"><i class="fa fa-bars"></i></a>
@@ -55,6 +63,16 @@
         <div class="w3-container content-body" id="appView"></div>
       </div>
     <script>
+      const progressModal = {
+        start: () => {
+          idOverlay.style.display = "inline-block";
+          idSpinner.style.display = "inline-block";
+        },
+        stop: () => {
+          idOverlay.style.display = "none";
+          idSpinner.style.display = "none";
+        }
+      }
       const sbOpen = () => {
         sideMenu.style.display = "block";
         navOpen.style.display = "none";

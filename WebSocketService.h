@@ -52,12 +52,17 @@ class WebSocketTopic {
 private:
   fnHdlPreCb m_hdlPreCb = nullptr;
   fnHdlPostCb m_hdlPostCb = nullptr;
+  uint32_t m_numSubscribers = 0;
   WebSocketHandler *m_wsHandlers[MAX_TOPIC_SUBSCRIBERS] = {0};
 public:
   std::string name; // topic name
 
   WebSocketTopic(const char *topic) {
     this->name = topic;
+  }
+
+  int numSubscribers() {
+    return this->m_numSubscribers;
   }
 
   void handlePreProcessRequest(const std::string& req, std::string& res) {
@@ -98,6 +103,7 @@ public:
     for (int idx = 0; idx < MAX_TOPIC_SUBSCRIBERS; idx++) {
       if (hdl == this->m_wsHandlers[idx]) {
         this->m_wsHandlers[idx] = nullptr;
+        this->m_numSubscribers--;
       }
     }
   }
@@ -108,6 +114,7 @@ public:
       if (nullptr == this->m_wsHandlers[idx]) {
         handler = new WebSocketHandler(this);
         this->m_wsHandlers[idx] = handler;
+        this->m_numSubscribers++;
         break;
       }
     }
@@ -182,7 +189,7 @@ void WebSocketHandler::onMessage(WebsocketInputStreambuf *stream) {
   // post-process request 
   this->m_parent->handlePostProcessRequest(res);
   // send back response now!
-  this->m_parent->sendToAllClients(res);
+  this->send(res, WebsocketHandler::SEND_TYPE_TEXT);
 }
 
 WebSocketHandler* WebSocketHandler::create(const std::string& _topic) {

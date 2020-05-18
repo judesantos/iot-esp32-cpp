@@ -69,6 +69,9 @@ SSLCert cert = SSLCert(
 YT::DeviceManager deviceManager;
 HTTPSServer secureServer = HTTPSServer(&cert, 443, MAX_CLIENTS);
 
+// push notifier handle - broadcast updates for each topic.
+WebSocketTopic *g_tp_esp32 = nullptr;
+
 // AP Configuration
 
 void configCb(WiFiManager *cfgMgr) {
@@ -82,7 +85,6 @@ void saveConfigCb() {
   // shouldSaveConfig = true;
 }
 
-  
 /*******************************************************************
  * uPC routines setup() and loop()
  ******************************************************************/
@@ -134,9 +136,19 @@ void setup() {
   xTaskCreatePinnedToCore(setupAsyncServer, "https443", 6144, NULL, 1, NULL, ARDUINO_RUNNING_CORE);  
 }
  
+// do hardware monitoring stuff here,,,
 void loop() {
-  // do hardware monitoring stuff here,,,
-  delay(10000);
+
+  // send back esp32mc information to ws subscribers
+  if (g_tp_esp32 && 0 < g_tp_esp32->numSubscribers()) {
+    std::string msg;
+    int16_t error = deviceManager.getUpdates("esp32", msg);
+    if (!error) {
+      g_tp_esp32->sendToAllClients(msg);
+    }
+  }
+
+  delay(3000); // update every 5s
 }
 
 /*******************************************************************
@@ -172,13 +184,14 @@ void setupAsyncServer(void *params) {
   secureServer.registerNode(rtRoot);
   ResourceNode *rtJs = new ResourceNode("/main.js", "GET", handleRoute);
   secureServer.registerNode(rtJs);
-  ResourceNode *rtCss = new ResourceNode("/styles.css", "GET", handleRoute);
-  secureServer.registerNode(rtCss);
+  ResourceNode *rtImg = new ResourceNode("/esp32.jpg", "GET", handleRoute);
+  secureServer.registerNode(rtImg);
   
   /* register websockets */
 
   const char *topic_gpio = "/gpio";
   const char *topic_gps = "/gps";
+  const char *topic_esp32 = "/esp32";
   const char *topic_thermistor = "/thermistor";
   const char *topic_proximity = "/proximity";
   // create topic and setup application layer handlers 
@@ -193,6 +206,14 @@ void setupAsyncServer(void *params) {
   secureServer.registerNode(wsNode);
 
   // do the same routine for the rest of the topics
+
+  tp = g_tp_esp32 = WebSocketManager::topic(topic_esp32);
+  if (tp) {
+    tp->registerPreProcessHandler(&preProcessHandler);
+    tp->registerPostProcessHandler(&postProcessHandler);
+  }
+  wsNode = new WebSocketNode(topic_esp32, &WebSocketHandler::create);
+  secureServer.registerNode(wsNode);
 
   tp = WebSocketManager::topic(topic_gps);
   if (tp) {

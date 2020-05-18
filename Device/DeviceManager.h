@@ -5,6 +5,7 @@
 #include "GPS.h"
 #include "Thermistor.h"
 #include "Proximity.h"
+#include "ESP32.h"
 
 #define MAX_DEVICES 100
 
@@ -23,6 +24,8 @@ namespace YT {
           d = new Proximity();
       } else if (0 == strcmp(name, "thermistor")) {
           d = new Thermistor();
+      } else if (0 == strcmp(name, "esp32")) {
+          d = new ESP32MC();
       }
       Serial.printf("createDeviceAbstractionObject - Created device instance '%s:%d'\n", name, d);
       return d;
@@ -55,6 +58,28 @@ namespace YT {
         }
       }
     }
+    // get information from specified property
+    // used by topic publisher to push updates of specified property
+    int16_t getUpdates(const char* prop, std::string& strRes) {
+      int16_t error = Device::STATUS_ERROR;
+      Device *d = this->getDevice(prop);
+      if (d) {
+        // create json response object
+        StaticJsonDocument<DOC_SIZE> docRes;
+        JsonObject res = docRes.to<JsonObject>(); // initialize
+        // process response
+        error = d->getInfo(res);
+        if (Device::STATUS_SUCCESS == error) {
+          strRes = this->jsonResponse(res);
+        } else {
+          error = Device::UNKNOWN_ERROR;
+        }
+      } else {
+        strRes = this->jsonResponse(prop, Device::INVALID_NOT_SUPPORTED,
+          "device type not supported");
+      }
+      return error;
+    } 
     /**
     * DeviceManager::processRequest()
     * Entry point for all hardware requests.
