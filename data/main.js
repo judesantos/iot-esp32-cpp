@@ -1,11 +1,13 @@
 
 const debug = true;
 // ESP32 abstraction client
-const ESP32MC = () => {
-    this.temp_c;
-    this.temp_f;
-    this.hall;
-    this.update = (data) => {
+class ESP32MC {
+    constructor() {
+        this.temp_c;
+        this.temp_f;
+        this.hall;
+    }
+    update = (data) => {
         if ('response' in data) {
             let res = data.response;
             if ('temp_c' in res)
@@ -16,7 +18,7 @@ const ESP32MC = () => {
                 this.hall = res.hall;
         }
     }
-    this.toJson = () => {
+    toJson = () => {
         return {
             property: 'esp32',
             temp_c: this.temp_c,
@@ -24,18 +26,19 @@ const ESP32MC = () => {
             hall: this.hall,
         };
     }
-    this.toJsonString = () => {
+    toJsonString = () => {
         return JSON.stringify(this.toJson());
     }
-    return this;
 }
 // GPIO abstraction client
-const GPIO = (_type='out') => {
-    this.state = '?'; // Current state: 'ON', 'OFF'
-    this.pin = null; // EX.: GPIO PIN 1, 2, 3, ETC.
-    this.mode = _type; // 'in', 'out'
-    this.pullUp = true // transtion state - send to device manager
-    this.update = (data) => {
+class GPIO {
+    constructor(_type='out') {
+        this.state = '?'; // Current state: 'ON', 'OFF'
+        this.pin = null; // EX.: GPIO PIN 1, 2, 3, ETC.
+        this.mode = _type; // 'in', 'out'
+        this.pullUp = true // transtion state - send to device manager
+    }
+    update = (data) => {
         if ('request' in data) {
             let req = data.request;
             if (!('property' in req)) {
@@ -56,13 +59,13 @@ const GPIO = (_type='out') => {
             }
         }
     }
-    this.enable = () => {
+    enable = () => {
         this.pullUp = true;
     }
-    this.disable = () => {
+    disable = () => {
         this.pullUp = false;
     }
-    this.toJson = () => {
+    toJson = () => {
         return {
             property: 'gpio',
             pin: this.pin,
@@ -71,11 +74,10 @@ const GPIO = (_type='out') => {
             pullUp: this.pullUp
         };
     }
-    this.toJsonString = () => {
+    toJsonString = () => {
         return JSON.stringify(this.toJson());
     }
-    return this;
-};
+}
 
 /**
  * websocket - return instance
@@ -104,7 +106,7 @@ class WSClient {
     connect() {
         console.log('WSClient::connect - ' + this.topic);
         if (null == this.ws) {
-            let target = "wss://" + document.location.host + '/' + this.topic
+            let target = "wss://" + document.location.host + '/' + this.topic;
             printMessage("Connecting to " + target + "...");
             this.ws = new WebSocket(target);
             this.ws.onopen = (evt) => { this.fnOpen(evt); }
@@ -116,11 +118,13 @@ class WSClient {
     }
 }
 
-const ESP32 = () => {
-    this.gpio = null;
-    this.esp32mc = null;
-    this.sessions = new Map();
-    this.prepareWS = (_topic) => {
+class ESP32 {
+    constructor() {
+        this.gpio = null;
+        this.esp32mc = null;
+        this.sessions = new Map();
+    }
+    prepareWS = (_topic) => {
         // connect client to the topic, disconnect all others
         this.sessions.forEach(c => {
             if (c.topic === _topic) {
@@ -133,15 +137,14 @@ const ESP32 = () => {
                 c.close();
             }
         })
-    };
-    this.getWSClient = (_topic) => {
+    }
+    getWSClient = (_topic) => {
         return this.sessions.get(_topic);
-    };
-    this.addWSClient = (_topic, _onOpen, _onClose, _onMessage, _onError) => {
+    }
+    addWSClient = (_topic, _onOpen, _onClose, _onMessage, _onError) => {
         const client = new WSClient(_topic, _onOpen, _onClose, _onMessage, _onError);
         this.sessions.set(_topic, client);
     }
-    return this;
 };
 
 // prepare hooks for websocket listeners
@@ -149,7 +152,7 @@ const init = () => {
     // clean view on reload
     _resetView();
     // create session context
-    const ctx = window.esp32 = ESP32();
+    const ctx = window.esp32 = new ESP32();
     // create wsocket for topic 'gpio'
     ctx.addWSClient(
         'gpio', 
@@ -246,19 +249,18 @@ const processJsonResponse = (res) => {
             }
         } else if ('esp32' === req.property) {
             ctx.esp32mc.update(res.data);
-            //window.esp32.esp32mc.update(res.data);
             // update dom element with id gpio_state
             let elTemp = document.getElementById('mcTemp');
             if (elTemp) {
-                elTemp.innerHTML = ctx.esp32mc.temp_f + ' &#176;F / ' + 
+                elTemp.innerHTML = ctx.esp32mc.temp_f + ' &#176;F | ' + 
                     ctx.esp32mc.temp_c + ' &#176;C';
-                //elTemp.innerHTML = window.esp32.esp32mc.temp_f + ' &#176;F / ' + 
-                //    window.esp32.esp32mc.temp_c + ' &#176;C';
             }
             let elProximity = document.getElementById('mcProximity');
             if (elProximity) {
                 elProximity.innerHTML = ctx.esp32mc.hall;
-                //elProximity.innerHTML = window.esp32.esp32mc.hall;
+            }
+            if (elProximity.innerHTML.length) {
+                progressModal.stop();
             }
         }
     }
@@ -286,80 +288,105 @@ const printMessage = (msg, error = false) => {
  */
 
 const callHome = () => {
-    // Check if we already have the section in cache. Persists on page revisit.
-    if (typeof callHome._homePage !== 'undefined') {
-        appView.innerHTML = this._homePage;
-        return;
-    }
+    // start window-busy overlay
     progressModal.start();
     // clear previous content 
     _resetView(); 
-    // store for reuse
+    // get session context
     const ctx = window.esp32;
     if (!ctx.esp32mc) {
-        ctx.esp32mc = ESP32MC();
+        ctx.esp32mc = new ESP32MC();
     }
     // prepare ws - connect to server using topic 'esp32'
     ctx.prepareWS('esp32');
+    // Check if we already have the section in cache. Persists on page revisit.
+    if (typeof callHome._homePage !== 'undefined') {
+        appView.innerHTML = callHome._homePage;
+        return;
+    }
     // rendeer new content
-    this._homePage = 
+    callHome._homePage = 
         '<div class="w3-bar">' +
           '<h3 class="w3-bar-item" style="color:rgb(124, 156, 206)"><i class="fa fa-home"></i></h3></a><br>' +
           '<a href="https://www.google.com" target="_blank" class="w3-bar-item w3-right"><i class="fa fa-search"></i></a>' +
-        '</div><p>' +
-        '<ul class="w3-ul w3-card">' +
+        '</div>' +
+        '<ul class="w3-ul">' +
           '<li class="w3-bar">' +
-          '  <i class="w3-bar-item w3-circle fa fa-thermometer-1 fa-lg" style="margin-top:5px"></i>' +
-          '  <div class="w3-bar-item w3-right">' +
-          '    <span class="w3-large w3-text-gray" id="mcTemp"></span>' +
+          '  <i class="w3-bar-item w3-circle fa fa-thermometer-1 w3-xxlarge w3-text-green" style="margin-left:5px"></i>' +
+          '  <div class="w3-bar-item">' +
+          '    <span class="w3-large w3-text-gray"" id="mcTemp">_ &#176;F | _ &#176;C</span>' +
           '  </div>' +
           '</li>' +
           '<li class="w3-bar">' +
-          '  <i class="w3-bar-item w3-circle fa fa-magnet fa-lg" style="margin-top:5px"></i>' +
-          '  <div class="w3-bar-item w3-right">' +
-          '    <span class="w3-large w3-text-gray" id="mcProximity"></span>' +
+          '  <i class="w3-bar-item w3-circle fa fa-magnet w3-xxlarge w3-text-deep-orange"></i>' +
+          '  <div class="w3-bar-item">' +
+          '    <span class="w3-large w3-text-gray"" id="mcProximity">_.__</span></div>' +
+          '</li>' +
+          '<li class="w3-bar">' +
+          '  <i class="w3-bar-item w3-circle w3-xxlarge fa fa-microchip w3-text-grey"></i>' +
+          '  <div class="w3-bar-item">' +
+          '    <a class="w3-text-indigo" onclick="viewESP32PinoutDiagram()">ESP32 Pinouts</a><br>' +
           '  </div>' +
           '</li>' +
-        '</ul><p>' +
-        '<div class="w3-card" id="imgEsp32Cont" style="display:none;">' +
-          '<img id="imgEsp32" style="width:100%">' +
-          '<div class="w3-content w3-container">' +
-            '<p class="w3-text-blue"><a target="_blank" href="https://github.com/HelTecAutomation/Heltec_ESP32">ESP32 Library</a></p>' +
-            '<p class="w3-text-blue"><a target="_blank" href="https://github.com/judesantos/iot-esp32-cpp">Controller App Repo</a></p>' +
-          '</div>' +
-        '</div>';
+          '<li class="w3-bar">' +
+          '  <i class="w3-bar-item w3-circle w3-xxlarge fa fa-github w3-text-grey"></i>' +
+          '  <div class="w3-bar-item">' +
+          '    <a class="w3-text-indigo" target="_blank" href="https://github.com/HelTecAutomation/Heltec_ESP32">ESP32 Library</a><br>' +
+          '  </div>' +
+          '</li>' +
+          '<li class="w3-bar">' +
+          '  <i class="w3-bar-item w3-circle w3-xxlarge fa fa-github w3-text-grey"></i>' +
+          '  <div class="w3-bar-item">' +
+          '    <a class="w3-text-indigo" target="_blank" href="https://github.com/judesantos/iot-esp32-cpp">ESP32-WS Project</a><br>' +
+          '  </div>' +
+          '</li>' +
+        '</ul>';
  
     // render content
-    appView.innerHTML = this._homePage;
-    // load esp32.jpg.
-    let _imgEsp32 = document.getElementById('imgEsp32');
-    let imgEsp32Cont = document.getElementById('imgEsp32Cont');
-    if (!_imgEsp32.src.length) {
-        _imgEsp32.onload = () => { 
-            imgEsp32Cont.style.display = "block";
-            progressModal.stop();
+    appView.innerHTML = callHome._homePage;
+    // dynamically load esp32.jpg - hidden
+    let elImgEsp32 = document.getElementById('idImgEsp32');
+    if (!elImgEsp32) {
+        elImgEsp32 = document.createElement('img');
+        if (elImgEsp32) {
+            elImgEsp32.setAttribute('id', 'idImgEsp32');
+            elImgEsp32.style.display = 'none';
+            elImgEsp32.onload = () => {
+                progressModal.stop();
+            }
+            elImgEsp32.src = 'https://' + document.location.host + '/esp32.jpg';
+            document.body.appendChild(elImgEsp32);
         }
-        _imgEsp32.src = 'https://' + document.location.host + '/esp32.jpg';
     }
 }   
 
-const callGpio = () => {
-    // Check if we already have the section in cache. Persists on page revisit.
-    if (typeof callHome.gpioPage !== 'undefined') {
-        appView.innerHTML = this.gpioPage;
-        return;
+const viewESP32PinoutDiagram = () => {
+    let elImgEsp32 = document.getElementById('idImgEsp32');
+    if (elImgEsp32) {
+        window.open(elImgEsp32.src, "_blank");
     }
+}
+
+const callGpio = () => {
+    // start window-busy overlay
+    progressModal.start();
     // clear previous content 
     _resetView(); 
     // create device object
     const ctx = window.esp32;
     if (!ctx.gpio) {
-        ctx.gpio = GPIO();
+        ctx.gpio = new GPIO();
     }
     // prepare ws - connect to server using topic 'gpio'
     ctx.prepareWS('gpio');
+    // Check if we already have the section in cache. Persists on page revisit.
+    if (typeof callGpio.gpioPage !== 'undefined') {
+        appView.innerHTML = callGpio.gpioPage;
+        progressModal.stop();
+        return;
+    }
     // render content
-    this.gpioPage = 
+    callGpio.gpioPage = 
         '<div class="w3-bar" style="padding:none !important">' +
           '<h3 class="w3-bar-item" style="color:rgb(124, 156, 206)">gpio</h3><br>' +
         '</div>' +
@@ -437,15 +464,15 @@ const callGpio = () => {
           '</center><p><br><hr/><p>' +
         '</div>';
 
-    appView.innerHTML = this.gpioPage;
+    appView.innerHTML = callGpio.gpioPage;
     // set default io state
     let state = document.getElementById('gpio_state');
     if (!state) {
         throw 'DOM object "gpio_state" not found"';
         return;
     }
-    state.innerText = gpio.state;
-
+    state.innerText = ctx.gpio.state;
+    progressModal.stop();
 }
 
 const pinChanged = (val) => {
@@ -485,45 +512,72 @@ const typeDropdownClose = () => {
 }
 
 const callGps = () => {
+    // start window-busy overlay
+    progressModal.start();
     // clear previous content 
     _resetView(); 
+    // Check if we already have the section in cache. Persists on page revisit.
+    if (typeof callGps.gpioPage !== 'undefined') {
+        appView.innerHTML = callGps.gpsPage;
+        progressModal.stop();
+        return;
+    }
     // rendeer new content
-    const _body = 
+    callGps.gpsPage = 
         '<div class="w3-bar">' +
           '<h3 class="w3-bar-item" style="color:rgb(124, 156, 206)">gps</h3></a><br>' +
         '</div>' +
         '<div class="w3-content">' +
         '</div>';
 
-    appView.innerHTML = _body;
+    appView.innerHTML = callGps.gpsPage;
+    progressModal.stop();
 }
 
 const callThermistor = () => {
+    // start window-busy overlay
+    progressModal.start();
     // clear previous content 
     _resetView(); 
+    // Check if we already have the section in cache. Persists on page revisit.
+    if (typeof callThermistor.thermPage !== 'undefined') {
+        appView.innerHTML = callThermistor.thermPage;
+        progressModal.stop();
+        return;
+    }
     // rendeer new content
-    const _body = 
+    callThermistor.thermPage = 
         '<div class="w3-bar">' +
           '<h3 class="w3-bar-item" style="color:rgb(124, 156, 206)">thermistor</h3></a><br>' +
         '</div>' +
         '<div class="w3-content">' +
         '</div>';
 
-    appView.innerHTML = _body;
+    appView.innerHTML = callThermistor.thermPage;
+    progressModal.stop();
 }
 
 const callProximity = () => {
+    // start window-busy overlay
+    progressModal.start();
     // clear previous content 
     _resetView(); 
+    // Check if we already have the section in cache. Persists on page revisit.
+    if (typeof callProximity.proximPage !== 'undefined') {
+        appView.innerHTML = callProximity.proximPage;
+        progressModal.stop();
+        return;
+    }
     // rendeer new content
-    const _body = 
+    callProximity.proximPage = 
         '<div class="w3-bar">' +
           '<h3 class="w3-bar-item" style="color:rgb(124, 156, 206)">proximity</h3></a><br>' +
         '</div>' +
         '<div class="w3-content">' +
         '</div>';
 
-    appView.innerHTML = _body;
+    appView.innerHTML = callProximity.proximPage;
+    progressModal.stop();
 }
 
 /**

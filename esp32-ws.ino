@@ -1,6 +1,6 @@
 /***************************************************************************************
  *
- * Based on ESP32_HTTPS_Server and WifiManager
+ * Based on ESP32_HTTPS_Server v1.0.0 and WifiManager
  *  Developed/tested in heltec esp32 8mb hardware & Arduino IDE
  * 
  * Features:

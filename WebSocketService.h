@@ -199,30 +199,43 @@ WebSocketHandler* WebSocketHandler::create(const std::string& _topic) {
 }
 
 /**
- * class WebSocketNode
+ * class WebSocketNode (check typecase of 'socket' in WebsocketNode vs WebSocketNode)
+ *
+ *    Extends ESP32_HTTPS_SERVER WebsocketNode's createFunction(0 argument) 
+ *    and allow storing of topic passed as string parameter to a modified 
+ *    createFunction(string topicName). 
+ *
+ *    This allows for an application to hoard the ws topics and handlers in a list/map,
+ *    and thus control over the lifetime and delegation of outbound (push/publish) 
+ *    and inbound (pull/subscribe) messages.
  * 
- * NOTE: For the inherittance to work WebsocketNode had to be updated to
- *  an abstract class, makeing method newHandler() virtual and setting creatorFunction 
+ * NOTE: For the inherittance to work, WebsocketNode need to be updated to
+ *  an abstract class, making method newHandler() virtual and setting creatorFunction 
  *  self initialized to be ignored by child class and use its own custom create callback.
  *  
  *  REVISED ESP32_HTTPS_Server WebsocketNode class declaration: 
  *  
- *    Update your version of this lib in WebsocketNode.hpp accordingly.
+ *  Update your version of this lib in WebsocketNode.hpp accordingly:
  *  
- *  class WebsocketNode : public HTTPNode {
- *   public:
- *     WebsocketNode(const std::string &path, const WebsocketHandlerCreator creatorFunction, const std::string &tag = "");
- *     WebsocketNode(const std::string &path, const std::string &tag = ""):
- *       HTTPNode(path, WEBSOCKET, tag) {
- *     };
- *     virtual ~WebsocketNode();
- *     virtual WebsocketHandler* newHandler();
- *     std::string getMethod() { return std::string("GET"); }
- *   private:
- *     const WebsocketHandlerCreator * _creatorFunction = nullptr;
- *   };
+ *    class WebsocketNode : public HTTPNode {
+ *     public:
+ *       WebsocketNode(
+ *        const std::string &path,
+ *        const WebsocketHandlerCreator creatorFunction, const std::string &tag = ""
+ *       );
+ *       WebsocketNode(const std::string &path, const std::string &tag = ""):
+ *         HTTPNode(path, WEBSOCKET, tag) {
+ *       };
+ *       virtual ~WebsocketNode();
+ *       virtual WebsocketHandler* newHandler();
+ *       std::string getMethod() { return std::string("GET"); }
+ *     private:
+ *       const WebsocketHandlerCreator * _creatorFunction = nullptr;
+ *    };
  *   
  */
+
+// New creation callback method, with 1 parameter for the topic name
 typedef WebSocketHandler* (*fnWebSocketHandlerCreator)(const std::string&);
 
 class WebSocketNode : public WebsocketNode {

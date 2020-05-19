@@ -6,9 +6,6 @@
       ESP32 Device Manager 
     </title>
     <link rel="icon" href="data:,"> 
-    <!--
-    <link rel="stylesheet" type="text/css" href="./styles.css">
-    -->
     <link rel="stylesheet" href="https://www.w3schools.com/w3css/4/w3.css">
     <link rel="stylesheet" href="https://www.w3schools.com/lib/w3-theme-indigo.css">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
@@ -41,11 +38,11 @@
       <!-- Sidebar -->
       <div class="w3-sidebar w3-bar-block w3-border-right" id="sideMenu">
         <a href="#" class="w3-bar-item w3-large w3-right" onclick="sbClose()" style="text-align:right;">&times;</a>
-        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="callHome();sbClose();"><i class="fa fa-home"></i></a>
-        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="callGpio();sbClose();">gpio</a>
-        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="callGps();sbClose();">gps</a>
-        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="callThermistor();sbClose();">thermistor</a>
-        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="callProximity();sbClose();">proximity</a>
+        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="sbClose();callHome();"><i class="fa fa-home"></i></a>
+        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="sbClose();callGpio();">gpio</a>
+        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="sbClose();callGps();">gps</a>
+        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="sbClose();callThermistor();">thermistor</a>
+        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="sbClose();callProximity();">proximity</a>
       </div>
       <!-- Page Content -->
       <div id="mainBody">
@@ -65,8 +62,8 @@
     <script>
       const progressModal = {
         start: () => {
-          idOverlay.style.display = "inline-block";
-          idSpinner.style.display = "inline-block";
+          idOverlay.style.display = "block";
+          idSpinner.style.display = "block";
         },
         stop: () => {
           idOverlay.style.display = "none";
