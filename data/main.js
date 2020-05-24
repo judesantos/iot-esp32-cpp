@@ -15,8 +15,9 @@ class ESP32MC {
         this.coreFreqMhz;
         this.sdkVersion;
         this.flashSize;
-        this.flashSpeedMhz;
+        this.flashSpeedMbps;
         this.flashMode;
+        this.heapSize;
     }
     update = (data) => {
         if ('response' in data) {
@@ -27,6 +28,8 @@ class ESP32MC {
                 this.temp_f = res.temp_f;
             if ('hall' in res) 
                 this.hall = res.hall;
+            if ('heap_size' in res) 
+                this.heapSize = res.heap_size;
             if ('free_heap' in res) 
                 this.freeHeap = res.free_heap;
             if ('mac' in res)
@@ -39,8 +42,8 @@ class ESP32MC {
                 this.sdkVersion = res.sdk_version;
             if ('flash_size' in res)
                 this.flashSize = res.flash_size;
-            if ('flash_speed_mhz' in res)
-                this.flashSpeedMhz = res.flash_speed_mhz;
+            if ('flash_speed_mbps' in res)
+                this.flashSpeedMbps = res.flash_speed_mbps;
             if ('flash_mode' in res) {
                 this.flashMode = res.flash_mode;
                 this.initialized = true;
@@ -121,47 +124,60 @@ class WSClient {
         this.fnError = _fnError;
         this.ws = null;
         this.connected = false;
+        this.closed = false; // user/app defined close, prevent auto reconnect if this is set.
     }
     send(msg) {
-        console.log('WSClient::send(' + msg + ')');
+        DEBUG_MSG('WSClient::send(' + msg + ')');
         this.ws.send(msg);
     }
+    // close socket.
     close() {
-        if (this.ws) {
-            this.connected = false;
-            this.ws.close();
-            this.ws = null;
-        }
+        // A closed socket is a dead socket - cleanup.
+        this.destroy();
     }
     reconnect() {
-        console.log('WSClient::reconnect - ' + this.topic);
-        if (this.connected) {
-            this.connected = false;
-            this.connect();
-        } else {
-            this.create();
+        DEBUG_MSG('WSClient::reconnect - ' + this.topic);
+        if (this.closed) {
+            // auto-reconnect is prevented by app 
+            // (e.g.: parent window of this socket not visible)
+            DEBUG_MSG('WSClient::reconnect - ' + this.topic + 
+                ' - socket was closed by application, cancell reconnect.');
+            return; 
         }
+        // reconnect on socket error only - due to connection error, or idle timeout.
+        this.connected = false;
+        this.connect();
     }
     connect() {
-        console.log('WSClient::connect - ' + this.topic);
+        DEBUG_MSG('WSClient::connect - ' + this.topic);
         if (null == this.ws || !this.connected) {
             this.create();
         }
     }
-    create() {
+    destroy() {
+        // release socket and reset to initial state
         if (this.ws) {
-            this.connected = false;
+            if (!this.closed)
+                this.ws.close();
             delete this.ws;
-            this.ws = null;
         }
+        this.connected = false;
+        this.closed = true;
+        this.ws = null;
+    }
+    create() {
+        // init state
+        this.destroy();
+        // fresh socket
         let target = "wss://" + document.location.host + '/' + this.topic;
-        printMessage("Connecting to " + target + "...");
+        DEBUG_MSG("Connecting to " + target + "...");
         this.ws = new WebSocket(target);
         this.ws.onopen = (evt) => { this.fnOpen(evt); }
         this.ws.onclose = (evt) => { this.fnClose(evt); }
         this.ws.onmessage = (evt) => { this.fnMessage(evt); }
         this.ws.onerror = (evt) => { this.fnError(evt); }
         this.connected = true;
+        this.closed = false;
     }
 }
 
@@ -181,7 +197,7 @@ class ESP32 {
             } else {
                 if (!c.connected)
                     return;
-                c.close();
+                c.close(); // disable reconnect
             }
         })
     }
@@ -200,7 +216,7 @@ const reconnectClient = (topic) => {
     if (client) {
         client.reconnect();
     } else {
-        console.log('reconnect error not found!, client: ' + topic);
+        DEBUG_MSG('reconnect error - not found!, client: ' + topic, true);
     }
 }
 
@@ -213,57 +229,61 @@ const init = () => {
         ctx.addWSClient(
             'gpio', 
             (evt) => { // onOpen
-                printMessage("gpio: Socket is connected. Listening for requests...");
+                DEBUG_MSG("gpio: Socket is connected. Listening for requests...");
             },
             (evt) => { // onClose
-                printMessage("gpio: onClose");
+                DEBUG_MSG("gpio: onClose");
                 reconnectClient('gpio');
             },
             (evt) => { // onMessage
-                printMessage('gpio: Message Received: [' + evt.data + ']');
+                DEBUG_MSG('gpio: Message Received: [' + evt.data + ']');
                 try {
                     if (evt.data) {
                         res = JSON.parse(evt.data);
                         processJsonResponse(res);
                     } else {
-                        printMessage('gpio: Error message received:', true);
-                        printMessage(evt);
+                        DEBUG_MSG('gpio: Error message received:', true);
+                        DEBUG_MSG(evt);
                     }
                 } catch (e) {
-                    printMessage(e, true);
+                    DEBUG_MSG(e, true);
                 }
             },
-            (evt) => { // onError
-                printMessage(evt.data, true);
+            (e) => { // onError
+                if (e.target.readyState == 3)
+                    return; // disconnected before connection acquired - ignore
+                DEBUG_MSG(e, true);
             }
         );
         // create socket for topic 'esp32' MC
         ctx.addWSClient(
             'esp32',
             (evt) => { // onOpen
-                printMessage("esp32: Socket is connected. Listening for requests...");
-                console.log(evt);
+                DEBUG_MSG("esp32: Socket is connected. Listening for requests...");
+                DEBUG_MSG(evt);
             },
             (evt) => { // onClose
-                printMessage("esp32: onClose");
+                DEBUG_MSG("esp32: onClose");
                 reconnectClient('esp32');
             },
             (evt) => { // onMessage
-                printMessage('esp32: Message Received: [' + evt.data + ']');
+                DEBUG_MSG('esp32: Message Received: [' + evt.data + ']');
                 try {
                     if (evt.data) {
                         res = JSON.parse(evt.data);
                         processJsonResponse(res);
                     } else {
-                        printMessage('esp32: Error message received:', true);
-                        printMessage(evt);
+                        DEBUG_MSG('esp32: Error message received:', true);
+                        DEBUG_MSG(evt);
                     }
                 } catch (e) {
-                    printMessage(e, true);
+                    DEBUG_MSG(e, true);
                 }
             },
-            (evt) => { // onError
-                printMessage(evt.data, true);
+            (e) => { // onError
+                if (e.target.readyState == 3)
+                    return; // disconnected before connection acquired - ignore
+                DEBUG_MSG(e, true);
             }
         );
     }
@@ -275,7 +295,7 @@ const init = () => {
 
 const processJsonResponse = (res) => {
     if (0 !== res.status) {
-        printMessage(res.message, true);
+        DEBUG_MSG(res.message, true);
         return;
     } 
     if ('data' in res && 'request' in res.data) {
@@ -323,17 +343,21 @@ const processJsonResponse = (res) => {
             if (el) {
                 el.innerHTML = parseFloat((ctx.esp32mc.freeHeap / 1000)).toFixed(2) + ' KB';
             }
+            el = document.getElementById('idMemSize');
+            if (el) {
+                el.innerHTML = parseFloat((ctx.esp32mc.heapSize / 1000)).toFixed(2) + ' KB';
+            }
             el = document.getElementById('idMacAddress');
             if (el) {
                 el.innerHTML = ctx.esp32mc.mac;
             }
             el = document.getElementById('idFlashSize');
             if (el) {
-                el.innerHTML = ctx.esp32mc.flashSize;
+                el.innerHTML = ctx.esp32mc.flashSize + ' MB';
             }
             el = document.getElementById('idFlashSpeed');
             if (el) {
-                el.innerHTML = ctx.esp32mc.flashSpeedMhz + ' Mhz';
+                el.innerHTML = ctx.esp32mc.flashSpeedMbps + ' Mhz';
             }
             el = document.getElementById('idFlashMode');
             if (el) {
@@ -372,12 +396,12 @@ const sendJsonMessage = (json) => {
     }
 } 
 
-const printMessage = (msg, error = false) => {
-    if (!debug) 
-        return;
+const DEBUG_MSG = (msg, error = false) => {
     if (error) {
         console.error(msg);
     } else {
+        if (!debug) 
+            return;
         console.log(msg);
     }
 }
@@ -440,7 +464,7 @@ const callHome = () => {
           '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idFlashSize">...</span>' +
           '  </div>' +
           '  <div class="w3-small w3-right chip">' +
-          '    <span class="w3-bar-item chip-info">Flash speed</span>' +
+          '    <span class="w3-bar-item chip-info">Flash freq.</span>' +
           '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idFlashSpeed">...</span>' +
           '  </div>' +
           '  <div class="w3-small w3-right chip">' +
@@ -652,6 +676,10 @@ const callGps = () => {
     progressModal.start();
     // clear previous content 
     _resetView(); 
+    // get app context
+    const ctx = window.esp32;
+    // prepare ws - connect to server using topic 'gps'
+    ctx.prepareWS('gps');
     // Check if we already have the section in cache. Persists on page revisit.
     if (typeof callGps.gpioPage !== 'undefined') {
         appView.innerHTML = callGps.gpsPage;
@@ -675,6 +703,10 @@ const callThermistor = () => {
     progressModal.start();
     // clear previous content 
     _resetView(); 
+    // get app context
+    const ctx = window.esp32;
+    // prepare ws - connect to server using topic 'thermistor'
+    ctx.prepareWS('thermistor');
     // Check if we already have the section in cache. Persists on page revisit.
     if (typeof callThermistor.thermPage !== 'undefined') {
         appView.innerHTML = callThermistor.thermPage;
@@ -698,8 +730,12 @@ const callHumidity = () => {
     progressModal.start();
     // clear previous content 
     _resetView(); 
+    // get app context
+    const ctx = window.esp32;
+    // prepare ws - connect to server using topic 'humidity'
+    ctx.prepareWS('humidity');
     // Check if we already have the section in cache. Persists on page revisit.
-    if (typeof callHumidity.humidPage !== 'undefined') {
+    if (typeof callHumidity.proximityPage !== 'undefined') {
         appView.innerHTML = callProximity.humidPage;
         progressModal.stop();
         return;
@@ -721,6 +757,10 @@ const callProximity = () => {
     progressModal.start();
     // clear previous content 
     _resetView(); 
+    // get app context
+    const ctx = window.esp32;
+    // prepare ws - connect to server using topic 'proximity'
+    ctx.prepareWS('proximity');
     // Check if we already have the section in cache. Persists on page revisit.
     if (typeof callProximity.proximPage !== 'undefined') {
         appView.innerHTML = callProximity.proximPage;

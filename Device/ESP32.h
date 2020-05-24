@@ -69,9 +69,11 @@ namespace YT {
       jsonRes["response"]["chip_revision"] = ESP.getChipRevision();
       jsonRes["response"]["chip_freq_mhz"] = ESP.getCpuFreqMHz();
       jsonRes["response"]["sdk_version"] = ESP.getSdkVersion();
+      jsonRes["response"]["heap_size"] = ESP.getHeapSize();
+      
       // get flash chip info
-      jsonRes["response"]["flash_size"] = ESP.getFlashChipSize();
-      jsonRes["response"]["flash_speed_mhz"] = ESP.getFlashChipSpeed() / 1000000;
+      jsonRes["response"]["flash_size"] = ESP.getFlashChipSize() / 1000000;
+      jsonRes["response"]["flash_speed_mbps"] = ESP.getFlashChipSpeed() / 1000000;
       jsonRes["response"]["flash_mode"] = ESP.getFlashChipMode();
       return Device::STATUS_SUCCESS;
     }
