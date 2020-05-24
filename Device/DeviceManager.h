@@ -68,7 +68,7 @@ namespace YT {
         StaticJsonDocument<DOC_SIZE> docRes;
         JsonObject res = docRes.to<JsonObject>(); // initialize
         // process response
-        error = d->getInfo(res);
+        error = d->getStatus(res);
         if (Device::STATUS_SUCCESS == error) {
           strRes = this->jsonResponse(res);
         } else {

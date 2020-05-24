@@ -3,7 +3,7 @@
 
 #include <ArduinoJson.h>
 
-#define DOC_SIZE (JSON_OBJECT_SIZE(4) + 180)
+#define DOC_SIZE (JSON_OBJECT_SIZE(4) + 180 * 2)
 
 namespace YT {
 
@@ -16,6 +16,7 @@ namespace YT {
 
     virtual int16_t handleCommand(const JsonObject& jsonReq, JsonObject& jsonRes) = 0;
     virtual int16_t getInfo(JsonObject& jsonRes) { return INVALID_NOT_IMPLEMENTED; }
+    virtual int16_t getStatus(JsonObject& jsonRes) { return INVALID_NOT_IMPLEMENTED; }
 
     static const int16_t STATUS_SUCCESS = 0;
     static const int16_t STATUS_ERROR = -10000;

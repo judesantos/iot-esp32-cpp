@@ -3,9 +3,20 @@ const debug = true;
 // ESP32 abstraction client
 class ESP32MC {
     constructor() {
+        this.initialized = false;
+        // dynamic info
         this.temp_c;
         this.temp_f;
         this.hall;
+        this.freeHeap;
+        // static info
+        this.mac;
+        this.revision;
+        this.coreFreqMhz;
+        this.sdkVersion;
+        this.flashSize;
+        this.flashSpeedMhz;
+        this.flashMode;
     }
     update = (data) => {
         if ('response' in data) {
@@ -16,11 +27,30 @@ class ESP32MC {
                 this.temp_f = res.temp_f;
             if ('hall' in res) 
                 this.hall = res.hall;
+            if ('free_heap' in res) 
+                this.freeHeap = res.free_heap;
+            if ('mac' in res)
+                this.mac = res.mac;
+            if ('chip_revision' in res)
+                this.revision = res.chip_revision;
+            if ('chip_freq_mhz' in res)
+                this.coreFreqMhz = res.chip_freq_mhz;
+            if ('sdk_version' in res)
+                this.sdkVersion = res.sdk_version;
+            if ('flash_size' in res)
+                this.flashSize = res.flash_size;
+            if ('flash_speed_mhz' in res)
+                this.flashSpeedMhz = res.flash_speed_mhz;
+            if ('flash_mode' in res) {
+                this.flashMode = res.flash_mode;
+                this.initialized = true;
+            }
         }
     }
     toJson = () => {
         return {
             property: 'esp32',
+            type: 'all', // get static and dynamic info
             temp_c: this.temp_c,
             temp_f: this.temp_f,
             hall: this.hall,
@@ -103,18 +133,35 @@ class WSClient {
             this.ws = null;
         }
     }
+    reconnect() {
+        console.log('WSClient::reconnect - ' + this.topic);
+        if (this.connected) {
+            this.connected = false;
+            this.connect();
+        } else {
+            this.create();
+        }
+    }
     connect() {
         console.log('WSClient::connect - ' + this.topic);
-        if (null == this.ws) {
-            let target = "wss://" + document.location.host + '/' + this.topic;
-            printMessage("Connecting to " + target + "...");
-            this.ws = new WebSocket(target);
-            this.ws.onopen = (evt) => { this.fnOpen(evt); }
-            this.ws.onclose = (evt) => { this.fnClose(evt); }
-            this.ws.onmessage = (evt) => { this.fnMessage(evt); }
-            this.ws.onerror = (evt) => { this.fnError(evt); }
-            this.connected = true;
+        if (null == this.ws || !this.connected) {
+            this.create();
         }
+    }
+    create() {
+        if (this.ws) {
+            this.connected = false;
+            delete this.ws;
+            this.ws = null;
+        }
+        let target = "wss://" + document.location.host + '/' + this.topic;
+        printMessage("Connecting to " + target + "...");
+        this.ws = new WebSocket(target);
+        this.ws.onopen = (evt) => { this.fnOpen(evt); }
+        this.ws.onclose = (evt) => { this.fnClose(evt); }
+        this.ws.onmessage = (evt) => { this.fnMessage(evt); }
+        this.ws.onerror = (evt) => { this.fnError(evt); }
+        this.connected = true;
     }
 }
 
@@ -147,68 +194,81 @@ class ESP32 {
     }
 };
 
+const reconnectClient = (topic) => {
+    const ctx = window.esp32;
+    const client = ctx.getWSClient(topic);
+    if (client) {
+        client.reconnect();
+    } else {
+        console.log('reconnect error not found!, client: ' + topic);
+    }
+}
+
 // prepare hooks for websocket listeners
 const init = () => {
+    if (undefined == window.esp32) {
+        // create session context
+        const ctx = window.esp32 = new ESP32();
+        // create wsocket for topic 'gpio'
+        ctx.addWSClient(
+            'gpio', 
+            (evt) => { // onOpen
+                printMessage("gpio: Socket is connected. Listening for requests...");
+            },
+            (evt) => { // onClose
+                printMessage("gpio: onClose");
+                reconnectClient('gpio');
+            },
+            (evt) => { // onMessage
+                printMessage('gpio: Message Received: [' + evt.data + ']');
+                try {
+                    if (evt.data) {
+                        res = JSON.parse(evt.data);
+                        processJsonResponse(res);
+                    } else {
+                        printMessage('gpio: Error message received:', true);
+                        printMessage(evt);
+                    }
+                } catch (e) {
+                    printMessage(e, true);
+                }
+            },
+            (evt) => { // onError
+                printMessage(evt.data, true);
+            }
+        );
+        // create socket for topic 'esp32' MC
+        ctx.addWSClient(
+            'esp32',
+            (evt) => { // onOpen
+                printMessage("esp32: Socket is connected. Listening for requests...");
+                console.log(evt);
+            },
+            (evt) => { // onClose
+                printMessage("esp32: onClose");
+                reconnectClient('esp32');
+            },
+            (evt) => { // onMessage
+                printMessage('esp32: Message Received: [' + evt.data + ']');
+                try {
+                    if (evt.data) {
+                        res = JSON.parse(evt.data);
+                        processJsonResponse(res);
+                    } else {
+                        printMessage('esp32: Error message received:', true);
+                        printMessage(evt);
+                    }
+                } catch (e) {
+                    printMessage(e, true);
+                }
+            },
+            (evt) => { // onError
+                printMessage(evt.data, true);
+            }
+        );
+    }
     // clean view on reload
     _resetView();
-    // create session context
-    const ctx = window.esp32 = new ESP32();
-    // create wsocket for topic 'gpio'
-    ctx.addWSClient(
-        'gpio', 
-        (evt) => { // onOpen
-            printMessage("gpio: Socket is connected. Listening for requests...");
-        },
-        (evt) => { // onClose
-            printMessage("gpio: onClose");
-        },
-        (evt) => { // onMessage
-            printMessage('gpio: Message Received: [' + evt.data + ']');
-            try {
-                if (evt.data) {
-                    res = JSON.parse(evt.data);
-                    processJsonResponse(res);
-                } else {
-                    printMessage('gpio: Error message received:', true);
-                    printMessage(evt);
-                }
-            } catch (e) {
-                printMessage(e, true);
-            }
-        },
-        (evt) => { // onError
-            printMessage(evt.data, true);
-        }
-    );
-    // create socket for topic 'esp32' MC
-    ctx.addWSClient(
-        'esp32',
-        (evt) => { // onOpen
-            printMessage("esp32: Socket is connected. Listening for requests...");
-            console.log(evt);
-        },
-        (evt) => { // onClose
-            printMessage("esp32: onClose");
-            console.log(evt);
-        },
-        (evt) => { // onMessage
-            printMessage('esp32: Message Received: [' + evt.data + ']');
-            try {
-                if (evt.data) {
-                    res = JSON.parse(evt.data);
-                    processJsonResponse(res);
-                } else {
-                    printMessage('esp32: Error message received:', true);
-                    printMessage(evt);
-                }
-            } catch (e) {
-                printMessage(e, true);
-            }
-        },
-        (evt) => { // onError
-            printMessage(evt.data, true);
-        }
-    );
     // load default landing page
     callHome();
 };
@@ -250,24 +310,63 @@ const processJsonResponse = (res) => {
         } else if ('esp32' === req.property) {
             ctx.esp32mc.update(res.data);
             // update dom element with id gpio_state
-            let elTemp = document.getElementById('mcTemp');
-            if (elTemp) {
-                elTemp.innerHTML = ctx.esp32mc.temp_f + ' &#176;F | ' + 
+            let el = document.getElementById('mcTemp');
+            if (el) {
+                el.innerHTML = ctx.esp32mc.temp_f + ' &#176;F | ' + 
                     ctx.esp32mc.temp_c + ' &#176;C';
             }
-            let elProximity = document.getElementById('mcProximity');
-            if (elProximity) {
-                elProximity.innerHTML = ctx.esp32mc.hall;
+            el = document.getElementById('mcProximity');
+            if (el) {
+                el.innerHTML = ctx.esp32mc.hall;
             }
-            if (elProximity.innerHTML.length) {
+            el = document.getElementById('mcFreeHeap');
+            if (el) {
+                el.innerHTML = parseFloat((ctx.esp32mc.freeHeap / 1000)).toFixed(2) + ' KB';
+            }
+            el = document.getElementById('idMacAddress');
+            if (el) {
+                el.innerHTML = ctx.esp32mc.mac;
+            }
+            el = document.getElementById('idFlashSize');
+            if (el) {
+                el.innerHTML = ctx.esp32mc.flashSize;
+            }
+            el = document.getElementById('idFlashSpeed');
+            if (el) {
+                el.innerHTML = ctx.esp32mc.flashSpeedMhz + ' Mhz';
+            }
+            el = document.getElementById('idFlashMode');
+            if (el) {
+                el.innerHTML = ctx.esp32mc.flashMode;
+            }
+            el = document.getElementById('idRevision');
+            if (el) {
+                el.innerHTML = ctx.esp32mc.revision;
+            }
+            el = document.getElementById('idCoreFreq');
+            if (el) {
+                el.innerHTML = ctx.esp32mc.coreFreqMhz + ' Mhz';
+            }
+            el = document.getElementById('idSdkVersion');
+            if (el) {
+                el.innerHTML = ctx.esp32mc.sdkVersion;
+            }
+            if (el.innerHTML.length) {
                 progressModal.stop();
+            }
+            // socket is now connected and we have already received dynamic 
+            // updates through push updates from server. 
+            // Check if static data has been requested already, if not, send explicit pull request
+            if (!window.esp32.esp32mc.initialized) {
+                // no static data yet, send request - only happens on page load/reload.
+                sendJsonMessage(window.esp32.esp32mc.toJson());
             }
         }
     }
 }
 
 const sendJsonMessage = (json) => {
-    const session = window.esp32.getWSClient(json.property);
+    session = window.esp32.getWSClient(json.property);
     if (session) {
         session.send(JSON.stringify(json));
     }
@@ -307,20 +406,68 @@ const callHome = () => {
     // rendeer new content
     callHome._homePage = 
         '<div class="w3-bar">' +
-          '<h3 class="w3-bar-item" style="color:rgb(124, 156, 206)"><i class="fa fa-home"></i></h3></a><br>' +
+          '<h3 class="w3-bar-item w3-theme-indigo"><i class="fa fa-home"></i></h3></a><br>' +
           '<a href="https://www.google.com" target="_blank" class="w3-bar-item w3-right"><i class="fa fa-search"></i></a>' +
         '</div>' +
         '<ul class="w3-ul">' +
           '<li class="w3-bar">' +
           '  <i class="w3-bar-item w3-circle fa fa-thermometer-1 w3-xxlarge w3-text-green" style="margin-left:5px"></i>' +
           '  <div class="w3-bar-item">' +
-          '    <span class="w3-large w3-text-gray"" id="mcTemp">_ &#176;F | _ &#176;C</span>' +
+          '    <span class="w3-large w3-text-gray" id="mcTemp">...</span>' +
           '  </div>' +
           '</li>' +
           '<li class="w3-bar">' +
           '  <i class="w3-bar-item w3-circle fa fa-magnet w3-xxlarge w3-text-deep-orange"></i>' +
           '  <div class="w3-bar-item">' +
-          '    <span class="w3-large w3-text-gray"" id="mcProximity">_.__</span></div>' +
+          '    <span class="w3-large w3-text-gray" id="mcProximity">...</span></div>' +
+          '</li>' +
+          '<li class="w3-bar">' +
+          '  <i class="w3-bar-item" style="margin-left:14px;margin-right:8px;padding:0px;">' +
+          '  <svg xmlns="http://www.w3.org/2000/svg" height="40" viewBox="0 0 24 24" width="40"><path d="M0 0h24v24H0z" fill="none"/><path d="M15 9H9v6h6V9zm-2 4h-2v-2h2v2zm8-2V9h-2V7c0-1.1-.9-2-2-2h-2V3h-2v2h-2V3H9v2H7c-1.1 0-2 .9-2 2v2H3v2h2v2H3v2h2v2c0 1.1.9 2 2 2h2v2h2v-2h2v2h2v-2h2c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2zm-4 6H7V7h10v10z"/></svg>' +
+          '  </i>' +
+          '  <div class="w3-bar-item">' +
+          '    <span>Heap (free)</span>' +
+          '  </div>' +
+          '  <div class="w3-bar-item w3-right">' +
+          '    <span class="chip-info w3-text-gray" id="mcFreeHeap">...</span>' +
+          '  </div>' +
+          '  <div class="w3-small chip w3-right">' +
+          '    <span class="w3-bar-item chip-info">Memory size</span>' +
+          '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idMemSize">...</span>' +
+          '  </div>' +
+          '  <div class="w3-small w3-right chip">' +
+          '    <span class="w3-bar-item chip-info">Flash size</span>' +
+          '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idFlashSize">...</span>' +
+          '  </div>' +
+          '  <div class="w3-small w3-right chip">' +
+          '    <span class="w3-bar-item chip-info">Flash speed</span>' +
+          '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idFlashSpeed">...</span>' +
+          '  </div>' +
+          '  <div class="w3-small w3-right chip">' +
+          '    <span class="w3-bar-item chip-info">Flash mode</span>' +
+          '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idFlashMode">...</span>' +
+          '  </div>' +
+          '</li>' +
+          '<li class="w3-bar">' +
+          '  <i class="w3-bar-item" style="margin-left:14px;margin-right:8px;padding:0px;">' +
+          '  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="black" width="38px" height="38px"><path d="M22 9V7h-2V5c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2v-2h-2V9h2zm-4 10H4V5h14v14zM6 13h5v4H6zm6-6h4v3h-4zM6 7h5v5H6zm6 4h4v6h-4z"/><path d="M0 0h24v24H0zm0 0h24v24H0z" fill="none"/></svg>' +
+          '  </i>' +
+          '  <div class="w3-small w3-right chip">' +
+          '    <span class="w3-bar-item chip-info">MAC</span>' +
+          '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idMacAddress">...</span>' +
+          '  </div>' +
+          '  <div class="w3-small w3-right chip">' +
+          '    <span class="w3-bar-item chip-info">Core freq.</span>' +
+          '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idCoreFreq">...</span>' +
+          '  </div>' +
+          '  <div class="w3-small w3-right chip">' +
+          '    <span class="w3-bar-item chip-info">Core rev.</span>' +
+          '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idRevision">...</span>' +
+          '  </div>' +
+          '  <div class="w3-small w3-right chip">' +
+          '    <span class="w3-bar-item chip-info">SDK ver.</span>' +
+          '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idSdkVersion">...</span>' +
+          '  </div>' +
           '</li>' +
           '<li class="w3-bar">' +
           '  <i class="w3-bar-item w3-circle w3-xxlarge fa fa-microchip w3-text-grey"></i>' +
@@ -352,7 +499,7 @@ const callHome = () => {
             elImgEsp32.setAttribute('id', 'idImgEsp32');
             elImgEsp32.style.display = 'none';
             elImgEsp32.onload = () => {
-                progressModal.stop();
+                //progressModal.stop();
             }
             elImgEsp32.src = 'https://' + document.location.host + '/esp32.jpg';
             document.body.appendChild(elImgEsp32);
@@ -406,12 +553,7 @@ const callGpio = () => {
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(3);">GPIO3</a>' +
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(4);">GPIO4</a>' +
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(5);">GPIO5</a>' +
-              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(6);">GPIO6</a>' +
-              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(7);">GPIO7</a>' +
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(8);">GPIO8</a>' +
-              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(9);">GPIO9</a>' +
-              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(10);">GPIO10</a>' +
-              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(11);">GPIO11</a>' +
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(12);">GPIO12</a>' +
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(13);">GPIO13</a>' +
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(14);">GPIO14</a>' +
@@ -420,18 +562,12 @@ const callGpio = () => {
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(17);">GPIO17</a>' +
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(18);">GPIO18</a>' +
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(19);">GPIO19</a>' +
-              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(20);">GPIO20</a>' +
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(21);">GPIO21</a>' +
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(22);">GPIO22</a>' +
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(23);">GPIO23</a>' +
-              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(24);">GPIO24</a>' +
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(25);">GPIO25</a>' +
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(26);">GPIO26</a>' +
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(27);">GPIO27</a>' +
-              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(28);">GPIO28</a>' +
-              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(29);">GPIO29</a>' +
-              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(30);">GPIO30</a>' +
-              '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(31);">GPIO31</a>' +
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(32);">GPIO32</a>' +
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(33);">GPIO33</a>' +
               '<a href="#" class="w3-bar-item w3-button" onclick="pinChanged(34);">GPIO34</a>' +
@@ -554,6 +690,29 @@ const callThermistor = () => {
         '</div>';
 
     appView.innerHTML = callThermistor.thermPage;
+    progressModal.stop();
+}
+
+const callHumidity = () => {
+    // start window-busy overlay
+    progressModal.start();
+    // clear previous content 
+    _resetView(); 
+    // Check if we already have the section in cache. Persists on page revisit.
+    if (typeof callHumidity.humidPage !== 'undefined') {
+        appView.innerHTML = callProximity.humidPage;
+        progressModal.stop();
+        return;
+    }
+    // rendeer new content
+    callProximity.humidPage = 
+        '<div class="w3-bar">' +
+          '<h3 class="w3-bar-item" style="color:rgb(124, 156, 206)">proximity</h3></a><br>' +
+        '</div>' +
+        '<div class="w3-content">' +
+        '</div>';
+
+    appView.innerHTML = callProximity.humidPage;
     progressModal.stop();
 }
 

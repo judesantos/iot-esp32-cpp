@@ -49,22 +49,56 @@ namespace YT {
       return (double)h/1000;
     }
 
+    std::string macAddress() {
+      char buf[128] = {0};
+      uint64_t chipid = ESP.getEfuseMac(); // get MAC Address
+      sprintf(buf, "%04x%08x", (uint16_t)(chipid >> 32), (uint32_t)(chipid)); //print High 2 bytes, then low 4 bytes
+      std::string mac = std::string(buf);
+      // insert ':' between pairs of chars
+      for (int x = 0; x < 13;) {
+        mac.insert(x = 2 + x, ":");
+        ++x;
+      }
+      return mac;
+    }
+
     // get device info
     virtual int16_t getInfo(JsonObject& jsonRes) {
-        jsonRes["response"]["temp_c"] = temperatureC();
-        jsonRes["response"]["temp_f"] = temperatureF();
-        jsonRes["response"]["hall"] = hall();
-        jsonRes["request"]["property"] = "esp32";
-        return Device::STATUS_SUCCESS;
+      // core info
+      jsonRes["response"]["mac"] = macAddress();
+      jsonRes["response"]["chip_revision"] = ESP.getChipRevision();
+      jsonRes["response"]["chip_freq_mhz"] = ESP.getCpuFreqMHz();
+      jsonRes["response"]["sdk_version"] = ESP.getSdkVersion();
+      // get flash chip info
+      jsonRes["response"]["flash_size"] = ESP.getFlashChipSize();
+      jsonRes["response"]["flash_speed_mhz"] = ESP.getFlashChipSpeed() / 1000000;
+      jsonRes["response"]["flash_mode"] = ESP.getFlashChipMode();
+      return Device::STATUS_SUCCESS;
+    }
+
+    virtual int16_t getStatus(JsonObject& jsonRes) {
+      // get core status
+      jsonRes["response"]["free_heap"] = ESP.getFreeHeap();
+      jsonRes["response"]["chip_cycle_count"] = ESP.getCycleCount();
+      jsonRes["response"]["temp_c"] = temperatureC();
+      jsonRes["response"]["temp_f"] = temperatureF();
+      jsonRes["response"]["hall"] = hall();
+      jsonRes["request"]["property"] = "esp32";
+      return Device::STATUS_SUCCESS;
     }
 
     // handle request 
     virtual int16_t handleCommand(const JsonObject& jsonReq, JsonObject& jsonRes) {
       int16_t error = STATUS_SUCCESS;
-      auto mode = jsonReq["type"];
-      Serial.printf("GPIO::handleCommand() - mode:%s\n", (const char*) mode);
-      if (NULL != mode && 0 == strcmp(mode, "all")) {
+      auto type = jsonReq["type"];
+      auto prop = jsonReq["property"];
+
+      Serial.printf("GPIO::handleCommand() - property: %s, type:%s\n", 
+        (const char*) prop, (const char*) type);
+      
+      if (NULL != type && 0 == strcmp(type, "all")) {
         this->getInfo(jsonRes);
+        this->getStatus(jsonRes);
         jsonRes["request"] = jsonReq;
       } else {
         Serial.println("ESP32::handleCommand() - Error: command not found");

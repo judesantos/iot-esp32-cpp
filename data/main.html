@@ -32,6 +32,13 @@
         display: none;
         z-index: 3;
       }
+      .chip {
+        width: 80%;
+      }
+      .chip-info {
+        padding-bottom: 0px !important;
+        padding-top: 0px !important;
+      }
     </style>
   </head>
   <body">
@@ -42,6 +49,7 @@
         <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="sbClose();callGpio();">gpio</a>
         <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="sbClose();callGps();">gps</a>
         <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="sbClose();callThermistor();">thermistor</a>
+        <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="sbClose();callHumidity();">humidity</a>
         <a href="#" class="w3-bar-item w3-button w3-border-bottom" onclick="sbClose();callProximity();">proximity</a>
       </div>
       <!-- Page Content -->

@@ -119,7 +119,6 @@ void setup() {
     Once connected to 'ytAP', a user interface is autoloaded with a list of SSIDs, 
     select target SSID and provide password. Once access is granted, 
     'ytAP' will automatically shutdown and reconnect to the new AP.
-    The ssid and key will be stored in flash memory for reconnections.
   */
   WiFiManager wifiManager;
 
@@ -180,8 +179,10 @@ void setupAsyncServer(void *params) {
 
   ResourceNode *rt404 = new ResourceNode("", "GET", handle404);
   secureServer.setDefaultNode(rt404);
-  ResourceNode *rtRoot = new ResourceNode("/", "GET", handleRoute);
+  ResourceNode *rtRoot = new ResourceNode("/", "GET", handleRoute); // defaults to main.html
   secureServer.registerNode(rtRoot);
+  ResourceNode *rtEsp32 = new ResourceNode("/esp32", "GET", handleRoute);
+  secureServer.registerNode(rtEsp32);
   ResourceNode *rtJs = new ResourceNode("/main.js", "GET", handleRoute);
   secureServer.registerNode(rtJs);
   ResourceNode *rtImg = new ResourceNode("/esp32.jpg", "GET", handleRoute);
