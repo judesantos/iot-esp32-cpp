@@ -75,13 +75,13 @@ WebSocketTopic *g_tp_esp32 = nullptr;
 // AP Configuration
 
 void configCb(WiFiManager *cfgMgr) {
-  Serial.println("Entered config mode");
-  Serial.println(WiFi.softAPIP());
-  Serial.println(cfgMgr->getConfigPortalSSID());
+  DEBUG_PL("Entered config mode");
+  DEBUG_PL(WiFi.softAPIP());
+  DEBUG_PL(cfgMgr->getConfigPortalSSID());
 }
 
 void saveConfigCb() {
-  Serial.println("Should save config");
+  DEBUG_PL("Should save config");
   // shouldSaveConfig = true;
 }
 
@@ -91,21 +91,21 @@ void saveConfigCb() {
 
 void setup() {
 
-  Serial.begin(115200);
-  Serial.println("Mounting SPIFFS...");
+  DEBUG_BEGIN(115200);
+  DEBUG_PL("Mounting SPIFFS...");
 
-  if (!SPIFFS.begin(false)) {  
-     Serial.println("SPIFFS mount failed. Exit!");  
+  if (!SPIFFS.begin(true)) {  
+     DEBUG_PL("SPIFFS mount failed. Exit!");  
      return; 
   }
 
-  Serial.println("SPIFFS has been mounted.");
+  DEBUG_PL("SPIFFS has been mounted.");
 
   // load certificate - replace default (self-signed) test certificate 
   /*
   SSLCert *cert = getCertificate();
   if (cert == NULL) {
-    Serial.println("Could not load certificate. Stop.");
+    DEBUG_PL("Could not load certificate. Stop.");
     while(true);
   }
   */
@@ -122,17 +122,17 @@ void setup() {
   */
   WiFiManager wifiManager;
 
-  Serial.println("Connecting to wifi...");
+  DEBUG_PL("Connecting to wifi...");
 
   wifiManager.setAPCallback(configCb);
   wifiManager.setSaveConfigCallback(saveConfigCb);
   wifiManager.autoConnect(INTERNAL_AP_SSID, INTERNAL_AP_PW);
 
-  Serial.println("Connected to wifi.");
-  Serial.println("Setup web server...");
+  DEBUG_PL("Connected to wifi.");
+  DEBUG_PL("Setup web server...");
 
   // accept requests from another thread - asynchrnous webserver connections
-  xTaskCreatePinnedToCore(setupAsyncServer, "https443", 6144, NULL, 1, NULL, ARDUINO_RUNNING_CORE);  
+  xTaskCreatePinnedToCore(setupAsyncServer, "https443", 6144*2, NULL, 1, NULL, ARDUINO_RUNNING_CORE);  
 }
  
 // do hardware monitoring stuff here,,,
@@ -155,21 +155,21 @@ void loop() {
  ******************************************************************/
 
 void topicGeneralPreProcessHandler(const std::string& msg) {
-  Serial.println("topicGeneralPreProcessHandler() - received request");
+  DEBUG_PL("topicGeneralPreProcessHandler() - received request");
 }
 
 void topicGeneralPostProcessHandler(std::string& msg) {
-  Serial.println("topicGeneralPostProcessHandler() - process request");
+  DEBUG_PL("topicGeneralPostProcessHandler() - process request");
 }
 
 std::string preProcessHandler(const std::string& msg) {
-  Serial.println("socketPreProcessHandler() - received request");
+  DEBUG_PL("socketPreProcessHandler() - received request");
   topicGeneralPreProcessHandler(msg);
   return deviceManager.processRequest(msg);
 }
 
 void postProcessHandler(std::string& msg) {
-  Serial.println("socketPostProcessHandler() - process request");
+  DEBUG_PL("socketPostProcessHandler() - process request");
   topicGeneralPostProcessHandler(msg);
 }
 
@@ -187,6 +187,8 @@ void setupAsyncServer(void *params) {
   secureServer.registerNode(rtJs);
   ResourceNode *rtImg = new ResourceNode("/esp32.jpg", "GET", handleRoute);
   secureServer.registerNode(rtImg);
+  ResourceNode *rtReset = new ResourceNode("/reset", "GET", handleReset);
+  secureServer.registerNode(rtReset);
   
   /* register websockets */
 
@@ -244,7 +246,7 @@ void setupAsyncServer(void *params) {
   secureServer.start();
    
   if (secureServer.isRunning()) {
-    Serial.println("Server ready.");
+    DEBUG_PL("Server ready.");
     while(true) {
       secureServer.loop();
       delay(1);
@@ -262,6 +264,7 @@ void handle404(HTTPRequest * req, HTTPResponse * res) {
   res->println("<head><title>Not Found</title></head>");
   res->println("<body><center><h1>404 Not Found</h1><p>The requested resource was not found on this server.</p></center></body>");
   res->println("</html>");
+  res->finalize();
 }
 
 void handle405(HTTPRequest * req, HTTPResponse * res) {
@@ -274,6 +277,34 @@ void handle405(HTTPRequest * req, HTTPResponse * res) {
   res->println("<head><title>Method Not Allowed</title></head>");
   res->println("<body><center><h1>405 Not Found</h1><p>The requested method is restricted on this server.</p></center></body>");
   res->println("</html>");
+  res->finalize();
+}
+
+/**
+ * Delete previously configure SSID/PW, restart ESP32 to serve as local AP 'ytAP'.
+ */
+void handleReset(HTTPRequest * req, HTTPResponse * res) {
+  req->discardRequestBody();
+  res->setStatusCode(200);
+  res->setStatusText("Success");
+  res->setHeader("Content-Type", "text/html");
+  res->println("<!DOCTYPE html>");
+  res->println("<html>");
+  res->println("<head><title>Reset ESP32 Complete</title></head>");
+  res->println("<body><center><h1>Reset ESP32 Success!</h1><p><h3>" \
+    "To enter config mode and connect to a new wifi station, " \
+    "go to device wifi settings and search for 'ytAP'.<br>" \
+    "The Configure AP window should load immediately after connecting to 'ytAP'.<br>" \
+    "Select your preferred wifi station to connect to ESP32.</h3>" \
+    "Password may be required.</center></body>");
+  res->println("</html>");
+  res->finalize(); // send now!
+  delay(1000);
+  // reset wifi to local AP named 'ytAP'
+  WiFiManager wifiManager;
+  wifiManager.resetSettings();
+  WiFi.begin("",""); // workaround to WiFi bug - erase the previous stored SSID/PW
+  ESP.restart();       // restart ESP32, should load local AP instead of previous SSID
 }
 
 void handleRoute(HTTPRequest * req, HTTPResponse * res) {  
@@ -285,14 +316,14 @@ void handleRoute(HTTPRequest * req, HTTPResponse * res) {
 
     // Try to open the file
     std::string filename = std::string(DIR_PUBLIC) + reqFile;
-    Serial.println(String("loading file from SPIFFS:  ") + filename.c_str());
+    DEBUG_PL(String("loading file from SPIFFS:  ") + filename.c_str());
   
     // Check if the file exists
     if (!SPIFFS.exists(filename.c_str())) {
       return handle404(req, res);
     }
     
-    Serial.println(String(filename.c_str()) + String(" loaded!"));
+    DEBUG_PL(String(filename.c_str()) + String(" loaded!"));
 
     File file = SPIFFS.open(filename.c_str());
 
@@ -341,9 +372,9 @@ SSLCert * getCertificate() {
 
   // If now, create them 
   if (!keyFile || !certFile || keyFile.size()==0 || certFile.size()==0) {
-    Serial.println("No certificate found in SPIFFS, generating a new one for you.");
-    Serial.println("If you face a Guru Meditation, give the script another try (or two...).");
-    Serial.println("This may take up to a minute, so please stand by :)");
+    DEBUG_PL("No certificate found in SPIFFS, generating a new one for you.");
+    DEBUG_PL("If you face a Guru Meditation, give the script another try (or two...).");
+    DEBUG_PL("This may take up to a minute, so please stand by :)");
 
     SSLCert * newCert = new SSLCert();
     // The part after the CN= is the domain that this certificate will match, in this
@@ -358,7 +389,7 @@ SSLCert * getCertificate() {
       // Private key
       keyFile = SPIFFS.open("/key.der", FILE_WRITE);
       if (!keyFile || !keyFile.write(newCert->getPKData(), newCert->getPKLength())) {
-        Serial.println("Could not write /key.der");
+        DEBUG_PL("Could not write /key.der");
         failure = true;
       }
       if (keyFile) keyFile.close();
@@ -366,39 +397,39 @@ SSLCert * getCertificate() {
       // Certificate
       certFile = SPIFFS.open("/cert.der", FILE_WRITE);
       if (!certFile || !certFile.write(newCert->getCertData(), newCert->getCertLength())) {
-        Serial.println("Could not write /cert.der");
+        DEBUG_PL("Could not write /cert.der");
         failure = true;
       }
       if (certFile) certFile.close();
 
       if (failure) {
-        Serial.println("Certificate could not be stored permanently, generating new certificate on reboot...");
+        DEBUG_PL("Certificate could not be stored permanently, generating new certificate on reboot...");
       }
       return newCert;
     } else {
       // Certificate generation failed. Inform the user.
-      Serial.println("An error occured during certificate generation.");
-      Serial.print("Error code is 0x");
-      Serial.println(res, HEX);
-      Serial.println("You may have a look at SSLCert.h to find the reason for this error.");
+      DEBUG_PL("An error occured during certificate generation.");
+      DEBUG_P("Error code is 0x");
+      DEBUG_PL(res, HEX);
+      DEBUG_PL("You may have a look at SSLCert.h to find the reason for this error.");
       return NULL;
     }
 
   } else {
-    Serial.println("Reading certificate from SPIFFS.");
+    DEBUG_PL("Reading certificate from SPIFFS.");
     // The files exist, so we can create a certificate based on them
     size_t keySize = keyFile.size();
     size_t certSize = certFile.size();
 
     uint8_t * keyBuffer = new uint8_t[keySize];
     if (keyBuffer == NULL) {
-      Serial.println("Not enough memory to load privat key");
+      DEBUG_PL("Not enough memory to load privat key");
       return NULL;
     }
     uint8_t * certBuffer = new uint8_t[certSize];
     if (certBuffer == NULL) {
       delete[] keyBuffer;
-      Serial.println("Not enough memory to load certificate");
+      DEBUG_PL("Not enough memory to load certificate");
       return NULL;
     }
     keyFile.read(keyBuffer, keySize);
@@ -407,7 +438,7 @@ SSLCert * getCertificate() {
     // Close the files
     keyFile.close();
     certFile.close();
-    Serial.printf("Read %u bytes of certificate and %u bytes of key from SPIFFS\n", certSize, keySize);
+    DEBUG_F("Read %u bytes of certificate and %u bytes of key from SPIFFS\n", certSize, keySize);
     return new SSLCert(certBuffer, certSize, keyBuffer, keySize);
   }
 

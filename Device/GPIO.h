@@ -18,7 +18,7 @@ namespace YT {
       auto mode = jsonReq["type"];
       auto pin = jsonReq["pin"];
       auto pullUp = jsonReq["pullUp"];
-      Serial.printf("GPIO::handleCommand() - pin: %d, mode:%s, pullUp: %d\n", 
+      DEBUG_F("GPIO::handleCommand() - pin: %d, mode:%s, pullUp: %d\n", 
         (int)pin, (const char*) mode, (bool) pullUp);
       if (NULL != mode && NULL != pullUp && NULL != pin) {
         bool valid = false;
@@ -27,7 +27,7 @@ namespace YT {
         digitalWrite((int)pin, (bool)pullUp ? HIGH : LOW); // set value 
         // get new value from device
         bool _devValue = digitalRead((int)pin) > 0 ? true : false;
-        Serial.printf("GPIO::handleCommand() - digitalRead: '%d'\n", _devValue);
+        DEBUG_F("GPIO::handleCommand() - digitalRead: '%d'\n", _devValue);
         // verify if same as the input value
         if (_devValue == (bool)pullUp) {
           valid = true;
@@ -44,7 +44,7 @@ namespace YT {
         }
         jsonRes["request"] = jsonReq;
       } else {
-        Serial.println("GPIO::handleCommand() - Error: command not found");
+        DEBUG_PL("GPIO::handleCommand() - Error: command not found");
         error = INVALID_REQUEST_PROPERTY_NOT_FOUND;
       }
       return error;

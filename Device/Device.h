@@ -2,6 +2,7 @@
 #define _yt_device_H_
 
 #include <ArduinoJson.h>
+#include "../common.h"
 
 #define DOC_SIZE (JSON_OBJECT_SIZE(4) + 180 * 2)
 

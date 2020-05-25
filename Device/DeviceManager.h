@@ -27,7 +27,7 @@ namespace YT {
       } else if (0 == strcmp(name, "esp32")) {
           d = new ESP32MC();
       }
-      Serial.printf("createDeviceAbstractionObject - Created device instance '%s:%d'\n", name, d);
+      DEBUG_F("createDeviceAbstractionObject - Created device instance '%s:%d'\n", name, d);
       return d;
     }
     // get device instance from list. If not found, create.
@@ -39,7 +39,7 @@ namespace YT {
           break;
         }
       }
-      Serial.printf("DeviceManager::getDevice() - '%s:%d'\n", name, d);
+      DEBUG_F("DeviceManager::getDevice() - '%s:%d'\n", name, d);
       if (nullptr == d) {
         for (int idx = 0; idx < MAX_DEVICES; idx++) {
           if (nullptr == this->m_devices[idx]) {
@@ -87,14 +87,14 @@ namespace YT {
     * @return json formatted string response
     */
     std::string processRequest(const std::string& msg) {
-      Serial.println("Enter DeviceManager::processRequest()");
+      DEBUG_PL("Enter DeviceManager::processRequest()");
       std::string strRes;
       // jsonstring to jsonobject
       StaticJsonDocument<DOC_SIZE> docReq;
       auto error = deserializeJson(docReq, msg);
       if (error) {
-        Serial.print("deserializeJson() failed: ");
-        Serial.println(error.c_str());
+        DEBUG_P("deserializeJson() failed: ");
+        DEBUG_PL(error.c_str());
         return this->jsonResponse(msg, Device::INVALID_REQUEST, error.c_str());
       }
       JsonObject req = docReq.as<JsonObject>(); // cast
@@ -121,8 +121,8 @@ namespace YT {
         strRes = this->jsonResponse(msg, Device::INVALID_REQUEST_PROPERTY_NOT_FOUND,
           "no device type specified");
       }
-      Serial.printf("RESPONSE: %s\n", strRes.c_str());
-      Serial.println("Exit DeviceManager::processRequest()");
+      DEBUG_F("RESPONSE: %s\n", strRes.c_str());
+      DEBUG_PL("Exit DeviceManager::processRequest()");
       // return response as jsonString
       return strRes;
     }

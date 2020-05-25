@@ -15,6 +15,7 @@
 #define _yt_web_socket_service_H_
 
 #include <WebsocketHandler.hpp>
+#include "common.h"
 
 using namespace httpsserver;
 
@@ -66,27 +67,27 @@ public:
   }
 
   void handlePreProcessRequest(const std::string& req, std::string& res) {
-    Serial.printf("WebSocketHandler::handlePreProcessRequest(%s:%d)\n", this->name.c_str(), this);
+    DEBUG_F("WebSocketHandler::handlePreProcessRequest(%s:%d)\n", this->name.c_str(), this);
     if (nullptr != this->m_hdlPreCb) {
       res = this->m_hdlPreCb(req);
     }
   }
 
   void handlePostProcessRequest(std::string& res) {
-    Serial.printf("WebSocketHandler::handlePostProcessRequest(%s:%d)\n", this->name.c_str(), this);
+    DEBUG_F("WebSocketHandler::handlePostProcessRequest(%s:%d)\n", this->name.c_str(), this);
     if (nullptr != this->m_hdlPostCb) {
       this->m_hdlPostCb(res);
     }
   }
 
   void registerPreProcessHandler(fnHdlPreCb cb) {
-    Serial.printf("WebSocketTopic::registerPreProcessHandler(%s:%d) - cb(%d)\n", 
+    DEBUG_F("WebSocketTopic::registerPreProcessHandler(%s:%d) - cb(%d)\n", 
       this->name.c_str(), this, cb);
     this->m_hdlPreCb = cb;
   }
 
   void registerPostProcessHandler(fnHdlPostCb cb) {
-    Serial.printf("WebSocketTopic::registerPostProcessHandler(%s:%d) - cb(%d)\n", 
+    DEBUG_F("WebSocketTopic::registerPostProcessHandler(%s:%d) - cb(%d)\n", 
       this->name.c_str(), this, cb);
     this->m_hdlPostCb = cb;
   }
@@ -131,12 +132,12 @@ private:
   static WebSocketTopic *m_wsTopics[MAX_TOPICS];
 public:
   static WebSocketTopic* topic(const char* topic) {
-    Serial.printf("WebSocketManager::topic(%s)\n", topic);
+    DEBUG_F("WebSocketManager::topic(%s)\n", topic);
     WebSocketTopic *wsTopic = nullptr;
     for (int idx = 0; idx < MAX_TOPICS; idx++) {
       // check if exists
       if (nullptr != WebSocketManager::m_wsTopics[idx]) {
-        Serial.printf("search topic item '%s:%d'\n",
+        DEBUG_F("search topic item '%s:%d'\n",
           WebSocketManager::m_wsTopics[idx]->name.c_str(), 
             WebSocketManager::m_wsTopics[idx]);
       }
@@ -144,7 +145,7 @@ public:
         nullptr != WebSocketManager::m_wsTopics[idx] && 
         topic == WebSocketManager::m_wsTopics[idx]->name
       ) {
-        Serial.printf("found topic '%s:%d'\n", topic, WebSocketManager::m_wsTopics[idx]);
+        DEBUG_F("found topic '%s:%d'\n", topic, WebSocketManager::m_wsTopics[idx]);
         wsTopic = WebSocketManager::m_wsTopics[idx];
         break;
       }
@@ -154,7 +155,7 @@ public:
       for (int idx = 0; idx < MAX_TOPICS; idx++) {
         if (WebSocketManager::m_wsTopics[idx] == nullptr) {
           wsTopic = WebSocketManager::m_wsTopics[idx] = new WebSocketTopic(topic); 
-          Serial.printf("created new topic instance '%s:%d'\n", topic, wsTopic);
+          DEBUG_F("created new topic instance '%s:%d'\n", topic, wsTopic);
           break;
         }
       }
@@ -182,7 +183,7 @@ void WebSocketHandler::onMessage(WebsocketInputStreambuf *stream) {
   ss << stream;
   req = ss.str();
   
-  Serial.printf("WebSocketHandler::onMessage(%s) : %s\n", 
+  DEBUG_F("WebSocketHandler::onMessage(%s) : %s\n", 
     this->m_parent->name.c_str(), req.c_str());
   // pre-process request 
   this->m_parent->handlePreProcessRequest(req, res);
@@ -193,7 +194,7 @@ void WebSocketHandler::onMessage(WebsocketInputStreambuf *stream) {
 }
 
 WebSocketHandler* WebSocketHandler::create(const std::string& _topic) {
-  Serial.printf("WebSocketHandler::create() - register topic('%s')\n", _topic.c_str());
+  DEBUG_F("WebSocketHandler::create() - register topic('%s')\n", _topic.c_str());
   WebSocketTopic *t = WebSocketHandler::m_wsManager.topic(_topic.c_str());
   return t->subscribe();
 }
@@ -254,11 +255,11 @@ public:
   std::string getMethod() { return std::string("GET"); }
   
   WebsocketHandler* newHandler() {
-    Serial.println("FROM WebSocketHandler::newHandler()");
+    DEBUG_PL("FROM WebSocketHandler::newHandler()");
     if (0 >= this->_path.length()) {
-      Serial.println("ERROR: topic _path not defined!");
+      DEBUG_PL("ERROR: topic _path not defined!");
     }
-    Serial.println(this->_path.c_str());
+    DEBUG_PL(this->_path.c_str());
     WebSocketHandler *handler = _child_creatorFunction(this->_path);
     return handler;
   }

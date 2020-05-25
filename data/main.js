@@ -10,6 +10,7 @@ class ESP32MC {
         this.hall;
         this.freeHeap;
         // static info
+        this.ip;
         this.mac;
         this.revision;
         this.coreFreqMhz;
@@ -32,6 +33,8 @@ class ESP32MC {
                 this.heapSize = res.heap_size;
             if ('free_heap' in res) 
                 this.freeHeap = res.free_heap;
+            if ('ip' in res)
+                this.ip = res.ip;
             if ('mac' in res)
                 this.mac = res.mac;
             if ('chip_revision' in res)
@@ -347,6 +350,10 @@ const processJsonResponse = (res) => {
             if (el) {
                 el.innerHTML = parseFloat((ctx.esp32mc.heapSize / 1000)).toFixed(2) + ' KB';
             }
+            el = document.getElementById('idIpAddress');
+            if (el) {
+                el.innerHTML = ctx.esp32mc.ip;
+            }
             el = document.getElementById('idMacAddress');
             if (el) {
                 el.innerHTML = ctx.esp32mc.mac;
@@ -433,6 +440,7 @@ const callHome = () => {
           '<h3 class="w3-bar-item w3-theme-indigo"><i class="fa fa-home"></i></h3></a><br>' +
           '<a href="https://www.google.com" target="_blank" class="w3-bar-item w3-right"><i class="fa fa-search"></i></a>' +
         '</div>' +
+        '<div class="w3-content">' +
         '<ul class="w3-ul">' +
           '<li class="w3-bar">' +
           '  <i class="w3-bar-item w3-circle fa fa-thermometer-1 w3-xxlarge w3-text-green" style="margin-left:5px"></i>' +
@@ -449,26 +457,24 @@ const callHome = () => {
           '  <i class="w3-bar-item" style="margin-left:14px;margin-right:8px;padding:0px;">' +
           '  <svg xmlns="http://www.w3.org/2000/svg" height="40" viewBox="0 0 24 24" width="40"><path d="M0 0h24v24H0z" fill="none"/><path d="M15 9H9v6h6V9zm-2 4h-2v-2h2v2zm8-2V9h-2V7c0-1.1-.9-2-2-2h-2V3h-2v2h-2V3H9v2H7c-1.1 0-2 .9-2 2v2H3v2h2v2H3v2h2v2c0 1.1.9 2 2 2h2v2h2v-2h2v2h2v-2h2c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2zm-4 6H7V7h10v10z"/></svg>' +
           '  </i>' +
-          '  <div class="w3-bar-item">' +
-          '    <span>Heap (free)</span>' +
-          '  </div>' +
-          '  <div class="w3-bar-item w3-right">' +
-          '    <span class="chip-info w3-text-gray" id="mcFreeHeap">...</span>' +
+          '  <div class="w3-small chip w3-right">' +
+          '    <span class="w3-bar-item chip-info">heap (free)</span>' +
+          '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="mcFreeHeap">...</span>' +
           '  </div>' +
           '  <div class="w3-small chip w3-right">' +
-          '    <span class="w3-bar-item chip-info">Memory size</span>' +
+          '    <span class="w3-bar-item chip-info">memory size</span>' +
           '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idMemSize">...</span>' +
           '  </div>' +
           '  <div class="w3-small w3-right chip">' +
-          '    <span class="w3-bar-item chip-info">Flash size</span>' +
+          '    <span class="w3-bar-item chip-info">flash size</span>' +
           '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idFlashSize">...</span>' +
           '  </div>' +
           '  <div class="w3-small w3-right chip">' +
-          '    <span class="w3-bar-item chip-info">Flash freq.</span>' +
+          '    <span class="w3-bar-item chip-info">flash freq.</span>' +
           '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idFlashSpeed">...</span>' +
           '  </div>' +
           '  <div class="w3-small w3-right chip">' +
-          '    <span class="w3-bar-item chip-info">Flash mode</span>' +
+          '    <span class="w3-bar-item chip-info">flash mode</span>' +
           '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idFlashMode">...</span>' +
           '  </div>' +
           '</li>' +
@@ -477,65 +483,53 @@ const callHome = () => {
           '  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="black" width="38px" height="38px"><path d="M22 9V7h-2V5c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-2h2v-2h-2v-2h2v-2h-2V9h2zm-4 10H4V5h14v14zM6 13h5v4H6zm6-6h4v3h-4zM6 7h5v5H6zm6 4h4v6h-4z"/><path d="M0 0h24v24H0zm0 0h24v24H0z" fill="none"/></svg>' +
           '  </i>' +
           '  <div class="w3-small w3-right chip">' +
-          '    <span class="w3-bar-item chip-info">MAC</span>' +
-          '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idMacAddress">...</span>' +
-          '  </div>' +
-          '  <div class="w3-small w3-right chip">' +
-          '    <span class="w3-bar-item chip-info">Core freq.</span>' +
-          '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idCoreFreq">...</span>' +
-          '  </div>' +
-          '  <div class="w3-small w3-right chip">' +
-          '    <span class="w3-bar-item chip-info">Core rev.</span>' +
+          '    <span class="w3-bar-item chip-info">core rev.</span>' +
           '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idRevision">...</span>' +
           '  </div>' +
           '  <div class="w3-small w3-right chip">' +
-          '    <span class="w3-bar-item chip-info">SDK ver.</span>' +
+          '    <span class="w3-bar-item chip-info">core freq.</span>' +
+          '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idCoreFreq">...</span>' +
+          '  </div>' +
+          '  <div class="w3-small w3-right chip">' +
+          '    <span class="w3-bar-item chip-info">ip</span>' +
+          '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idIpAddress">...</span>' +
+          '  </div>' +
+          '  <div class="w3-small w3-right chip">' +
+          '    <span class="w3-bar-item chip-info">mac</span>' +
+          '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idMacAddress">...</span>' +
+          '  </div>' +
+          '  <div class="w3-small w3-right chip">' +
+          '    <span class="w3-bar-item chip-info">sdk</span>' +
           '    <span class="w3-bar-item chip-info w3-right w3-text-gray" id="idSdkVersion">...</span>' +
           '  </div>' +
           '</li>' +
           '<li class="w3-bar">' +
-          '  <i class="w3-bar-item w3-circle w3-xxlarge fa fa-microchip w3-text-grey"></i>' +
+          '  <i class="w3-bar-item w3-circle w3-xxlarge fa fa-microchip"></i>' +
           '  <div class="w3-bar-item">' +
           '    <a class="w3-text-indigo" onclick="viewESP32PinoutDiagram()">ESP32 Pinouts</a><br>' +
           '  </div>' +
           '</li>' +
           '<li class="w3-bar">' +
-          '  <i class="w3-bar-item w3-circle w3-xxlarge fa fa-github w3-text-grey"></i>' +
+          '  <i class="w3-bar-item w3-circle w3-xxlarge fa fa-github"></i>' +
           '  <div class="w3-bar-item">' +
           '    <a class="w3-text-indigo" target="_blank" href="https://github.com/HelTecAutomation/Heltec_ESP32">ESP32 Library</a><br>' +
           '  </div>' +
           '</li>' +
           '<li class="w3-bar">' +
-          '  <i class="w3-bar-item w3-circle w3-xxlarge fa fa-github w3-text-grey"></i>' +
+          '  <i class="w3-bar-item w3-circle w3-xxlarge fa fa-github"></i>' +
           '  <div class="w3-bar-item">' +
           '    <a class="w3-text-indigo" target="_blank" href="https://github.com/judesantos/iot-esp32-cpp">ESP32-WS Project</a><br>' +
           '  </div>' +
           '</li>' +
-        '</ul>';
+        '</ul>' +
+        '</div>';
  
     // render content
     appView.innerHTML = callHome._homePage;
-    // dynamically load esp32.jpg - hidden
-    let elImgEsp32 = document.getElementById('idImgEsp32');
-    if (!elImgEsp32) {
-        elImgEsp32 = document.createElement('img');
-        if (elImgEsp32) {
-            elImgEsp32.setAttribute('id', 'idImgEsp32');
-            elImgEsp32.style.display = 'none';
-            elImgEsp32.onload = () => {
-                //progressModal.stop();
-            }
-            elImgEsp32.src = 'https://' + document.location.host + '/esp32.jpg';
-            document.body.appendChild(elImgEsp32);
-        }
-    }
 }   
 
 const viewESP32PinoutDiagram = () => {
-    let elImgEsp32 = document.getElementById('idImgEsp32');
-    if (elImgEsp32) {
-        window.open(elImgEsp32.src, "_blank");
-    }
+    window.open('https://' + document.location.host + '/esp32.jpg', "_blank");
 }
 
 const callGpio = () => {
@@ -669,6 +663,43 @@ const typeDropdownOpen = () => {
 }
 const typeDropdownClose = () => {
     ddGpioType.style.display = "none";
+}
+
+const callSettings = () => {
+    // start window-busy overlay
+    progressModal.start();
+    // clear previous content 
+    _resetView(); 
+    // get app context
+    const ctx = window.esp32;
+    // prepare ws - connect to server using topic 'gps'
+    ctx.prepareWS('settings');
+    // Check if we already have the section in cache. Persists on page revisit.
+    if (typeof callSettings.settingsPage !== 'undefined') {
+        appView.innerHTML = callSettings.settingsPage;
+        progressModal.stop();
+        return;
+    }
+    // rendeer new content
+    callSettings.settingsPage = 
+        '<div class="w3-bar">' +
+          '<h3 class="w3-bar-item" style="color:rgb(124, 156, 206)">settings</h3></a><br>' +
+        '</div>' +
+        '<div class="w3-content w3-container">' +
+        ' <button class="w3-btn w3-xlarge w3-block w3-border w3-indigo" onclick="configureWifi()">Configure Wifi</button>' +
+        ' <button class="w3-btn w3-xlarge w3-block w3-border w3-indigo" onclick="">Configure Wifi</button>' +
+        ' <button class="w3-btn w3-xlarge w3-block w3-border w3-indigo" onclick="">Configure Wifi</button>' +
+        ' <button class="w3-btn w3-xlarge w3-block w3-border w3-indigo" onclick="">Configure Wifi</button>' +
+        ' <button class="w3-btn w3-xlarge w3-block w3-border w3-indigo" onclick="">Configure Wifi</button>' +
+        ' <button class="w3-btn w3-xlarge w3-block w3-border w3-indigo" onclick="">Configure Wifi</button>' +
+        '</div>';
+
+    appView.innerHTML = callSettings.settingsPage;
+    progressModal.stop();
+}
+
+const configureWifi = () => {
+    window.open('https://' + document.location.host + '/reset', '_self');
 }
 
 const callGps = () => {

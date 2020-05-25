@@ -1,6 +1,8 @@
 #ifndef _yt_esp32_H_
 #define _yt_esp32_H_
 
+#include <tcpip_adapter.h>
+
 #ifdef __cplusplus
   extern "C" {
 #endif
@@ -19,6 +21,7 @@ namespace YT {
    * Handle internal device information:
    *  - hall (magnetic proximity detector)
    *  - internal device temperature in F and C
+   *  - flash memory, heap, cpu, etc.
    */
   class ESP32MC : public Device {
   public:
@@ -50,22 +53,27 @@ namespace YT {
     }
 
     std::string macAddress() {
-      char buf[128] = {0};
-      uint64_t chipid = ESP.getEfuseMac(); // get MAC Address
-      sprintf(buf, "%04x%08x", (uint16_t)(chipid >> 32), (uint32_t)(chipid)); //print High 2 bytes, then low 4 bytes
-      std::string mac = std::string(buf);
-      // insert ':' between pairs of chars
-      for (int x = 0; x < 13;) {
-        mac.insert(x = 2 + x, ":");
-        ++x;
-      }
-      return mac;
+      uint8_t ui8Mac[6];
+      char achMac[18] = {0};
+      esp_read_mac(ui8Mac, ESP_MAC_WIFI_STA);
+      sprintf(achMac, "%02X:%02X:%02X:%02X:%02X:%02X", 
+        ui8Mac[0], ui8Mac[1], ui8Mac[2], ui8Mac[3], ui8Mac[4], ui8Mac[5]);
+      return std::string(achMac);
+    }
+
+    std::string ipAddress() {
+      tcpip_adapter_ip_info_t ipInfo; 
+      char achIP[32] = {0};
+      tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_STA, &ipInfo);
+      sprintf(achIP, "%s", ip4addr_ntoa(&ipInfo.ip));
+      return std::string(achIP);
     }
 
     // get device info
     virtual int16_t getInfo(JsonObject& jsonRes) {
       // core info
       jsonRes["response"]["mac"] = macAddress();
+      jsonRes["response"]["ip"] = ipAddress();
       jsonRes["response"]["chip_revision"] = ESP.getChipRevision();
       jsonRes["response"]["chip_freq_mhz"] = ESP.getCpuFreqMHz();
       jsonRes["response"]["sdk_version"] = ESP.getSdkVersion();
@@ -95,7 +103,7 @@ namespace YT {
       auto type = jsonReq["type"];
       auto prop = jsonReq["property"];
 
-      Serial.printf("GPIO::handleCommand() - property: %s, type:%s\n", 
+      DEBUG_F("GPIO::handleCommand() - property: %s, type:%s\n", 
         (const char*) prop, (const char*) type);
       
       if (NULL != type && 0 == strcmp(type, "all")) {
@@ -103,7 +111,7 @@ namespace YT {
         this->getStatus(jsonRes);
         jsonRes["request"] = jsonReq;
       } else {
-        Serial.println("ESP32::handleCommand() - Error: command not found");
+        DEBUG_PL("ESP32::handleCommand() - Error: command not found");
         error = INVALID_REQUEST_PROPERTY_NOT_FOUND;
       }
       return error;
