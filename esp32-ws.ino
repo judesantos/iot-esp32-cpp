@@ -21,7 +21,7 @@
 #include "private_key.h"
 
 #include <WiFi.h>
-#include <WiFiManager.h> 
+#include <WiFiManager.h>
 
 #include <HTTPSServer.hpp>
 #include <SSLCert.hpp>
@@ -120,6 +120,7 @@ void setup() {
     select target SSID and provide password. Once access is granted, 
     'ytAP' will automatically shutdown and reconnect to the new AP.
   */
+  WiFi.mode(WIFI_STA); // defaults to client mode
   WiFiManager wifiManager;
 
   DEBUG_PL("Connecting to wifi...");
@@ -187,7 +188,7 @@ void setupAsyncServer(void *params) {
   secureServer.registerNode(rtJs);
   ResourceNode *rtImg = new ResourceNode("/esp32.jpg", "GET", handleRoute);
   secureServer.registerNode(rtImg);
-  ResourceNode *rtReset = new ResourceNode("/reset", "GET", handleReset);
+  ResourceNode *rtReset = new ResourceNode("/config", "GET", handleReset);
   secureServer.registerNode(rtReset);
   
   /* register websockets */
@@ -290,21 +291,22 @@ void handleReset(HTTPRequest * req, HTTPResponse * res) {
   res->setHeader("Content-Type", "text/html");
   res->println("<!DOCTYPE html>");
   res->println("<html>");
-  res->println("<head><title>Reset ESP32 Complete</title></head>");
+  res->println("<head><title>Configure ESP32</title></head>");
   res->println("<body><center><h1>Reset ESP32 Success!</h1><p><h3>" \
     "To enter config mode and connect to a new wifi station, " \
     "go to device wifi settings and search for 'ytAP'.<br>" \
     "The Configure AP window should load immediately after connecting to 'ytAP'.<br>" \
-    "Select your preferred wifi station to connect to ESP32.</h3>" \
+    "Select your preferred wifi station to join ESP32.</h3>" \
     "Password may be required.</center></body>");
   res->println("</html>");
   res->finalize(); // send now!
   delay(1000);
-  // reset wifi to local AP named 'ytAP'
+  // Erase STA config 
   WiFiManager wifiManager;
   wifiManager.resetSettings();
-  WiFi.begin("",""); // workaround to WiFi bug - erase the previous stored SSID/PW
-  ESP.restart();       // restart ESP32, should load local AP instead of previous SSID
+  // teardown current configured STA and load wifi in AP Mode using SSID 'ytAP'
+  wifiManager.autoConnect(INTERNAL_AP_SSID, INTERNAL_AP_PW);
+  //ESP.restart(); // 
 }
 
 void handleRoute(HTTPRequest * req, HTTPResponse * res) {  

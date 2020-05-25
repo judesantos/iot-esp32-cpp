@@ -699,7 +699,17 @@ const callSettings = () => {
 }
 
 const configureWifi = () => {
-    window.open('https://' + document.location.host + '/reset', '_self');
+    let proceed = confirm("Configure Wifi\n\nThis action will erase the ESP32 wifi " +
+        "settings and disconnect from the server.\n\nPress OK to continue.");
+    if (proceed) {
+        proceed = confirm("Configure Wifi\n\n" + 
+            "The application will no longer be available after sending this request.\n" + 
+            "Go to wifi settings and select 'ytAP' to configure ESP32 server.\n\n" + 
+            "Press OK to proceed.");
+        if (proceed) {
+            window.open('https://' + document.location.host + '/config', '_self');
+        }
+    }
 }
 
 const callGps = () => {
